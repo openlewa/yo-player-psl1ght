@@ -258,3 +258,39 @@ func TestCLIInfoAndCompile(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPutAssetCaseFold(t *testing.T) {
+	m := map[string][]byte{}
+	putAsset(m, "Eileen.png", []byte{1})
+	putAsset(m, "eileen.png", []byte{2})
+	if len(m) != 1 {
+		t.Fatalf("want 1 key, got %#v", m)
+	}
+	if got := m["Eileen.png"]; len(got) != 1 || got[0] != 2 {
+		t.Fatalf("last write should win with first casing: %#v", m)
+	}
+}
+
+func TestScanClassesNullMemoDoesNotShift(t *testing.T) {
+	// PROTO2, "renpy", "ast", BININT1 0, MEMOIZE, BINGET 0, STACK_GLOBAL, STOP
+	b := []byte{0x80, 0x02, 0x8c, 5}
+	b = append(b, "renpy"...)
+	b = append(b, 0x8c, 3)
+	b = append(b, "ast"...)
+	b = append(b, 'K', 0, 0x94, 'h', 0, 0x93, '.')
+	classes := ScanClasses(b)
+	if _, ok := classes["renpy.ast"]; !ok {
+		t.Fatalf("missing renpy.ast in %v", classSetKeys(classes))
+	}
+	if _, ok := classes["ast."]; ok {
+		t.Fatal("null memo shifted STACK_GLOBAL into ast.")
+	}
+	if _, ok := classes["ast.ast"]; ok {
+		t.Fatal("null memo replayed ast as a second string")
+	}
+}
+
+func TestScanClassesTruncated(t *testing.T) {
+	ScanClasses([]byte{0x80})
+	ScanClasses([]byte{0x8c, 50})
+}

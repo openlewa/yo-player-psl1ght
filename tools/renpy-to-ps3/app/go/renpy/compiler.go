@@ -517,11 +517,6 @@ func resolveCharacters(p *IrProgram) {
 			}
 		} else if ins.Op == IrPyExec {
 			src := p.Str(ins.A)
-			for _, m := range charAssign.FindAllStringSubmatchIndex(src, -1) {
-				groups := charAssign.FindAllStringSubmatch(src, -1)
-				_ = groups
-				_ = m
-			}
 			for _, m := range charAssign.FindAllStringSubmatch(src, -1) {
 				if nm, ok := charNameOf(m[2]); ok {
 					cmap[m[1]] = nm

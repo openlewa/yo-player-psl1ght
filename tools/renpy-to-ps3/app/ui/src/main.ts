@@ -212,14 +212,14 @@ async function run() {
 
   try {
     const cmd = Command.sidecar("binaries/renpy-to-ps3", args);
-    cmd.stdout.on("data", (line) => appendLog(line));
-    cmd.stderr.on("data", (line) => appendLog(line));
-    const result = await cmd.execute();
-    if (result.stdout && !logView.value.includes(result.stdout.trim().slice(0, 40))) {
-      appendLog(result.stdout);
-    }
-    if (result.stderr) appendLog(result.stderr);
-    status.textContent = result.code === 0 ? "done" : "failed (see log)";
+    const code = await new Promise<number | null>((resolve, reject) => {
+      cmd.on("close", (data) => resolve(data.code));
+      cmd.on("error", (err) => reject(new Error(err)));
+      cmd.stdout.on("data", (line) => appendLog(line));
+      cmd.stderr.on("data", (line) => appendLog(line));
+      void cmd.spawn().catch(reject);
+    });
+    status.textContent = code === 0 ? "done" : "failed (see log)";
   } catch (err) {
     appendLog(String(err));
     status.textContent = "failed (see log)";

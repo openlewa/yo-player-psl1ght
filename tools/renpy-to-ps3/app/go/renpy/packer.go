@@ -25,6 +25,18 @@ var (
 
 const cacheVersion = 1
 
+// putAsset stores data under name, matching C# OrdinalIgnoreCase: last write
+// wins, but the first-seen casing of the key is kept.
+func putAsset(m map[string][]byte, name string, data []byte) {
+	for k := range m {
+		if strings.EqualFold(k, name) {
+			m[k] = data
+			return
+		}
+	}
+	m[name] = data
+}
+
 func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, clearCache bool) int {
 	staging, err := os.MkdirTemp("", "rpk_stage_")
 	if err != nil {
@@ -108,7 +120,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 			if err != nil {
 				continue
 			}
-			assets[name] = data
+			putAsset(assets, name, data)
 		}
 	}
 	_ = filepath.WalkDir(gameDir, func(p string, d fs.DirEntry, err error) error {
@@ -122,7 +134,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 		if imageExt[ext] || audioExt[ext] || videoExt[ext] || fontExt[ext] {
 			data, err := os.ReadFile(p)
 			if err == nil {
-				assets[relativePath(gameDir, p)] = data
+				putAsset(assets, relativePath(gameDir, p), data)
 			}
 		}
 		return nil

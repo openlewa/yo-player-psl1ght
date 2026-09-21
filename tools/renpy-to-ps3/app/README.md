@@ -54,4 +54,7 @@ info <game-dir>
 compile <rpyc|game-dir> [out.rbc]
 pack <game-dir> <out.rpk> [--max <px>] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache]
 rpk <file>
+script <rpyc>
+ast <rpyc> [label]
+atldump <rpyc>
 ```

@@ -22,10 +22,11 @@ func errf(format string, args ...any) { fmt.Fprintf(Stderr, format, args...) }
 func errln(args ...any)               { fmt.Fprintln(Stderr, args...) }
 
 // Run is the command-line engine the GUI calls with the same args.
-func Run(args []string) int {
+func Run(args []string) (code int) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			errln("error:", rec)
+			code = 1
 		}
 	}()
 	if len(args) == 0 {

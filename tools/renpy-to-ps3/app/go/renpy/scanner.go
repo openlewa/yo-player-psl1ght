@@ -7,16 +7,22 @@ import (
 
 // ScanClasses collects Python classes referenced in a pickle byte stream
 // without reconstructing objects.
-func ScanClasses(b []byte) map[string]struct{} {
-	return (&classScanner{
+func ScanClasses(b []byte) (out map[string]struct{}) {
+	defer func() {
+		if recover() != nil && out == nil {
+			out = map[string]struct{}{}
+		}
+	}()
+	out = (&classScanner{
 		classes: map[string]struct{}{},
-		memo:    map[int64]string{},
+		memo:    map[int64]*string{},
 	}).run(b)
+	return out
 }
 
 type classScanner struct {
 	classes                    map[string]struct{}
-	memo                       map[int64]string
+	memo                       map[int64]*string
 	memoCounter                int64
 	last1, last2, lastProduced string
 	hasLast1, hasLast2         bool
@@ -26,12 +32,10 @@ type classScanner struct {
 func (s *classScanner) produce(str string) {
 	s.lastProduced = str
 	s.producedIsNull = false
-	if str != "" || true {
-		s.last1 = s.last2
-		s.hasLast1 = s.hasLast2
-		s.last2 = str
-		s.hasLast2 = true
-	}
+	s.last1 = s.last2
+	s.hasLast1 = s.hasLast2
+	s.last2 = str
+	s.hasLast2 = true
 }
 
 func (s *classScanner) produceNull() {
@@ -39,9 +43,21 @@ func (s *classScanner) produceNull() {
 	s.producedIsNull = true
 }
 
-func (s *classScanner) memoGet(idx int64) (string, bool) {
-	v, ok := s.memo[idx]
-	return v, ok
+func (s *classScanner) memoPut(idx int64) {
+	if s.producedIsNull {
+		s.memo[idx] = nil
+		return
+	}
+	cp := s.lastProduced
+	s.memo[idx] = &cp
+}
+
+func (s *classScanner) memoGet(idx int64) {
+	if v, ok := s.memo[idx]; ok && v != nil {
+		s.produce(*v)
+		return
+	}
+	s.produceNull()
 }
 
 func (s *classScanner) run(b []byte) map[string]struct{} {
@@ -122,58 +138,27 @@ func (s *classScanner) run(b []byte) map[string]struct{} {
 			i += ln
 			s.produceNull()
 		case 0x94:
-			if s.producedIsNull {
-				s.memo[s.memoCounter] = ""
-			} else {
-				s.memo[s.memoCounter] = s.lastProduced
-			}
+			s.memoPut(s.memoCounter)
 			s.memoCounter++
 		case 'q':
 			idx := int64(b[i])
 			i++
-			if s.producedIsNull {
-				s.memo[idx] = ""
-			} else {
-				s.memo[idx] = s.lastProduced
-			}
+			s.memoPut(idx)
 		case 'r':
-			idx := int64(i32(b, &i))
-			if s.producedIsNull {
-				s.memo[idx] = ""
-			} else {
-				s.memo[idx] = s.lastProduced
-			}
+			s.memoPut(int64(i32(b, &i)))
 		case 'p':
 			e := newlineEnd(b, i)
-			idx := plong(b, i, e)
-			if s.producedIsNull {
-				s.memo[idx] = ""
-			} else {
-				s.memo[idx] = s.lastProduced
-			}
+			s.memoPut(plong(b, i, e))
 			i = e + 1
 		case 'h':
 			idx := int64(b[i])
 			i++
-			if v, ok := s.memoGet(idx); ok {
-				s.produce(v)
-			} else {
-				s.produceNull()
-			}
+			s.memoGet(idx)
 		case 'j':
-			idx := int64(i32(b, &i))
-			if v, ok := s.memoGet(idx); ok {
-				s.produce(v)
-			} else {
-				s.produceNull()
-			}
+			s.memoGet(int64(i32(b, &i)))
 		case 'g':
 			e := newlineEnd(b, i)
-			if v, ok := s.memoGet(plong(b, i, e)); ok {
-				s.produce(v)
-			} else {
-				s.produceNull()
-			}
+			s.memoGet(plong(b, i, e))
 			i = e + 1
 		case 'c':
 			e1 := newlineEnd(b, i)
