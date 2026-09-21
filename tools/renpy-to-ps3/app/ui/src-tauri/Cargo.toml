@@ -1,0 +1,27 @@
+[package]
+name = "renpy-to-ps3-app"
+version = "0.1.0"
+description = "Convert Ren'Py games to PS3 bundles"
+authors = ["yo-player"]
+edition = "2021"
+
+[lib]
+name = "renpy_to_ps3_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
