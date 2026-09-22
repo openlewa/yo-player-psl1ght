@@ -1,8 +1,10 @@
-# Ren'Py to PS3
+# Ren'Py to PS3 — Go port (alternative)
 
-Standalone converter under `tools/renpy-to-ps3/app`. It does **not** call the original C# / WPF program and does **not** need Visual Studio or MSBuild.
+Alternative to the original C# / WPF program in `tools/renpy-to-ps3`. That program is unchanged and still builds with Visual Studio or MSBuild. This folder is a separate Go port for when you do not want those tools, including on Windows 7.
 
-The only UI is a local page served by the Go program (`renpy-to-ps3 ui`) at http://127.0.0.1:8765/. Same tasks and log pane on Windows 7 and Windows 11.
+It does not call the C# program. The UI is a local page at http://127.0.0.1:8765/ (`renpy-to-ps3 ui`), with the same tasks and log pane on Windows 7 and Windows 11.
+
+Licensed under the Apache License, Version 2.0, January 2004. See `LICENSE`. Copyright openlewa.
 
 ## Why this does not call the C# app
 
@@ -23,24 +25,24 @@ No Node, Rust, WebView2, or Visual Studio.
 Double-click:
 
 ```bat
-tools\renpy-to-ps3\app\start-windows7.bat
+tools\renpy-to-ps3\app(go_port)\start-windows7.bat
 ```
 
 Or:
 
 ```bat
-cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app
+cd /d "path\to\yo-player-psl1ght\tools\renpy-to-ps3\app(go_port)"
 start-windows7.bat
 ```
 
-The script builds `app\go\renpy-to-ps3.exe`, copies `ffmpeg.exe` beside it, and opens the page. Close the console window to quit.
+The script builds `app(go_port)\go\renpy-to-ps3.exe`, copies `ffmpeg.exe` beside it, and opens the page. Close the console window to quit.
 
 If Go is missing, the script downloads the Go 1.20.14 installer and starts it. Finish that installer, then run `start-windows7.bat` again. If the download fails, install Go from https://go.dev/dl/go1.20.14.windows-amd64.msi and run the script again.
 
 Same thing by hand in **PowerShell** (including PowerShell 7):
 
 ```powershell
-Set-Location path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
+Set-Location "path\to\yo-player-psl1ght\tools\renpy-to-ps3\app(go_port)\go"
 go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3
 Copy-Item -Force ..\..\ffmpeg.exe .\ffmpeg.exe
 .\renpy-to-ps3.exe ui
@@ -49,7 +51,7 @@ Copy-Item -Force ..\..\ffmpeg.exe .\ffmpeg.exe
 In **Command Prompt**:
 
 ```bat
-cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
+cd /d "path\to\yo-player-psl1ght\tools\renpy-to-ps3\app(go_port)\go"
 go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3
 copy /Y ..\..\ffmpeg.exe .\ffmpeg.exe
 .\renpy-to-ps3.exe ui
@@ -64,7 +66,7 @@ A binary built with Go 1.21 or newer will not start on Windows 7. Build with Go 
 ## Start on Linux / macOS
 
 ```bash
-cd tools/renpy-to-ps3/app/go
+cd "tools/renpy-to-ps3/app(go_port)/go"
 go test ./renpy/
 go run ./cmd/renpy-to-ps3 ui
 ```

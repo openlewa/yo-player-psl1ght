@@ -260,6 +260,37 @@ func TestCLIInfoAndCompile(t *testing.T) {
 	}
 }
 
+func TestNormalizeRpkPath(t *testing.T) {
+	dir := t.TempDir()
+	game := filepath.Join(dir, "MyGame", "game")
+	if err := os.MkdirAll(game, 0755); err != nil {
+		t.Fatal(err)
+	}
+	outDir := filepath.Join(dir, "bundles")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := normalizeRpkPath(game, outDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(got) != "MyGame.rpk" || filepath.Dir(got) != outDir {
+		t.Fatalf("dir out: %s", got)
+	}
+	got, err = normalizeRpkPath(game, filepath.Join(dir, "bundle"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(got) != "bundle.rpk" {
+		t.Fatalf("missing ext: %s", got)
+	}
+	want := filepath.Join(dir, "ok.RPK")
+	got, err = normalizeRpkPath(game, want)
+	if err != nil || got != want {
+		t.Fatalf("keep rpk: %s %v", got, err)
+	}
+}
+
 func TestPutAssetCaseFold(t *testing.T) {
 	m := map[string][]byte{}
 	putAsset(m, "Eileen.png", []byte{1})

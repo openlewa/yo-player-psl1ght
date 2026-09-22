@@ -208,15 +208,25 @@
   $("browse-output").onclick = function () { openPicker("output"); };
   $("picker-cancel").onclick = closePicker;
   $("picker-up").onclick = function () { loadFs(pickerParent); };
+  function withExt(name, ext) {
+    if (name.length >= ext.length && name.slice(name.length - ext.length).toLowerCase() === ext) return name;
+    return name + ext;
+  }
+
+  function joinPath(dir, name) {
+    if (!dir) return name;
+    var slash = dir.indexOf("\\") >= 0 ? "\\" : "/";
+    return dir.replace(/[\\\/]+$/, "") + slash + name;
+  }
+
   $("picker-use").onclick = function () {
     var path = pickerCurrent;
     if (!wantsFolder()) {
       var name = pickerName.value.replace(/^\s+|\s+$/g, "");
       if (!name) return;
-      path = pickerCurrent ? pickerCurrent.replace(/[\\\/]$/, "") + "\\" + name : name;
-      if (pickerCurrent && pickerCurrent.charAt(0) === "/") {
-        path = pickerCurrent.replace(/\/$/, "") + "/" + name;
-      }
+      if (currentTask().isPack) name = withExt(name, ".rpk");
+      else if (currentTask().verb === "compile") name = withExt(name, ".rbc");
+      path = joinPath(pickerCurrent, name);
     }
     if (!path) return;
     choosePath(path);

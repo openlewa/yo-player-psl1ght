@@ -465,6 +465,7 @@ func shapeState(state any) string {
 
 func packCommand(args []string) int {
 	gameDir, outRpk := args[1], args[2]
+	var err error
 	maxDim := 1920
 	ffmpegPath := ""
 	asciiText, useCache, clearCache := false, true, false
@@ -495,6 +496,11 @@ func packCommand(args []string) int {
 	st, err := os.Stat(gameDir)
 	if err != nil || !st.IsDir() {
 		errln("error: game dir not found:", gameDir)
+		return 1
+	}
+	outRpk, err = normalizeRpkPath(gameDir, outRpk)
+	if err != nil {
+		errln("error:", err)
 		return 1
 	}
 	ff, err := NewFfmpeg(ffmpegPath)

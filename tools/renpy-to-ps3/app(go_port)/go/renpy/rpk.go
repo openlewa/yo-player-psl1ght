@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -21,6 +22,31 @@ type RpkTocEntry struct {
 
 const RpkMagic = "RPK1"
 const RpkVersion uint32 = 1
+
+// normalizeRpkPath makes sure pack writes a file that ends in .rpk.
+// A directory is treated as the folder to create <game>.rpk in.
+func normalizeRpkPath(gameDir, out string) (string, error) {
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return "", fmt.Errorf("missing output path")
+	}
+	if st, err := os.Stat(out); err == nil && st.IsDir() {
+		name := filepath.Base(filepath.Clean(filepath.Dir(filepath.Clean(gameDir))))
+		if name == "." || name == "" || name == string(filepath.Separator) {
+			name = "game"
+		}
+		out = filepath.Join(out, name+".rpk")
+	} else if !strings.EqualFold(filepath.Ext(out), ".rpk") {
+		out += ".rpk"
+	}
+	dir := filepath.Dir(out)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return "", err
+		}
+	}
+	return out, nil
+}
 
 func WriteRpk(path string, entries []RpkEntry) error {
 	names := make([][]byte, len(entries))

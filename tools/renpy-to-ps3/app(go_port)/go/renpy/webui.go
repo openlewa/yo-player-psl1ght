@@ -203,7 +203,11 @@ func listFS(p string) fsListing {
 		return fsListing{Path: abs, Parent: parentPath(abs), Error: err.Error()}
 	}
 	if !st.IsDir() {
-		return fsListing{Path: abs, Parent: parentPath(abs)}
+		abs = filepath.Dir(abs)
+		st, err = os.Stat(abs)
+		if err != nil || !st.IsDir() {
+			return fsListing{Path: abs, Parent: parentPath(abs), Error: "not a folder"}
+		}
 	}
 	ents, err := os.ReadDir(abs)
 	if err != nil {
