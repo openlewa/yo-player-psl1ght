@@ -8,8 +8,6 @@ The only UI is a local page served by the Go program (`renpy-to-ps3 ui`) at http
 
 `Program.Run` is an internal method. The project starts `RenpyToPs3.App`, which always opens `MainWindow.xaml`. There is no command-line entry point, and this repo does not ship a built `renpy-to-ps3.exe`.
 
-Wiring the page to that program would mean changing the C# startup code and compiling `renpy-to-ps3.csproj`. That compile needs MSBuild (Visual Studio or the .NET Framework build tools). Running an already-built WPF exe would only need the .NET Framework 4 runtime, but that exe is not produced here.
-
 This app is a separate Go program. Build it with the Go toolchain only.
 
 ## What you need
@@ -37,13 +35,13 @@ start-windows7.bat
 
 The script builds `app\go\renpy-to-ps3.exe`, copies `ffmpeg.exe` beside it, and opens the page. Close the console window to quit.
 
-Same thing by hand:
+Same thing by hand (Worked with PowerShell 7):
 
 ```bat
 cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
 go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3
 copy /Y ..\..\ffmpeg.exe .\ffmpeg.exe
-renpy-to-ps3.exe ui
+.\renpy-to-ps3.exe ui
 ```
 
 A binary built with Go 1.21 or newer will not start on Windows 7. Build with Go 1.20.14 if the exe has to run in that VM.
