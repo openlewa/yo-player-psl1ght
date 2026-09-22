@@ -35,7 +35,18 @@ start-windows7.bat
 
 The script builds `app\go\renpy-to-ps3.exe`, copies `ffmpeg.exe` beside it, and opens the page. Close the console window to quit.
 
-Same thing by hand (Worked with PowerShell 7):
+If Go is missing, the script downloads the Go 1.20.14 installer and starts it. Finish that installer, then run `start-windows7.bat` again. If the download fails, install Go from https://go.dev/dl/go1.20.14.windows-amd64.msi and run the script again.
+
+Same thing by hand in **PowerShell** (including PowerShell 7):
+
+```powershell
+Set-Location path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
+go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3
+Copy-Item -Force ..\..\ffmpeg.exe .\ffmpeg.exe
+.\renpy-to-ps3.exe ui
+```
+
+In **Command Prompt**:
 
 ```bat
 cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
@@ -43,6 +54,8 @@ go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3
 copy /Y ..\..\ffmpeg.exe .\ffmpeg.exe
 .\renpy-to-ps3.exe ui
 ```
+
+`cd /d` and `copy /Y` are Command Prompt only. PowerShell does not accept them. PowerShell also will not run `renpy-to-ps3.exe` from the current folder unless you write `.\renpy-to-ps3.exe`.
 
 A binary built with Go 1.21 or newer will not start on Windows 7. Build with Go 1.20.14 if the exe has to run in that VM.
 

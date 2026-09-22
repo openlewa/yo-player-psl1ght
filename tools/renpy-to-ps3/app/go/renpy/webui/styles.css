@@ -19,26 +19,18 @@ body {
 }
 
 .row {
-  display: table;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   margin-bottom: 10px;
 }
 
-.row > label:first-child,
-.row > .field,
-.row > button,
-.row > select,
-.row > .pack-opts,
-.row > input.short {
-  display: table-cell;
-  vertical-align: middle;
-}
-
 .row > label:first-child {
+  flex: 0 0 120px;
   width: 120px;
   text-align: right;
   color: #707070;
-  padding-right: 8px;
 }
 
 .hidden {
@@ -67,19 +59,20 @@ select {
 
 .field {
   position: relative;
-  width: 99%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .field input {
   width: 100%;
 }
 
-.hint {
-  position: absolute;
-  left: 8px;
-  top: 4px;
+.row > button {
+  flex: 0 0 auto;
+}
+
+input::placeholder {
   color: #707070;
-  pointer-events: none;
 }
 
 .num {
@@ -88,6 +81,14 @@ select {
 
 .short {
   width: 200px;
+}
+
+.pack-opts {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .pack-opts label {
@@ -161,10 +162,20 @@ button:disabled {
   padding: 10px;
 }
 
-.picker-path {
+.picker-help {
   color: #707070;
   margin-bottom: 6px;
+}
+
+.picker-path {
+  color: #cccccc;
+  margin-bottom: 6px;
   word-break: break-all;
+}
+
+.picker-name {
+  width: 140px;
+  margin-left: 8px;
 }
 
 .picker-list {

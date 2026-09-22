@@ -16,10 +16,8 @@
   var taskEl = $("task");
   var inputLabel = $("input-label");
   var inputPath = $("input-path");
-  var inputHint = $("input-hint");
   var outputRow = $("output-row");
   var outputPath = $("output-path");
-  var outputHint = $("output-hint");
   var packRow = $("pack-row");
   var astRow = $("ast-row");
   var astLabel = $("ast-label");
@@ -34,28 +32,24 @@
   var pickerPath = $("picker-path");
   var pickerList = $("picker-list");
   var pickerUse = $("picker-use");
+  var pickerName = $("picker-name");
   var pickerMode = "input";
   var pickerCurrent = "";
+  var pickerParent = "";
 
   function currentTask() {
     return tasks[taskEl.selectedIndex] || tasks[0];
   }
 
-  function syncHints() {
-    inputHint.style.display = inputPath.value.length === 0 ? "block" : "none";
-    outputHint.style.display = outputPath.value.length === 0 ? "block" : "none";
-  }
-
   function onTaskChosen() {
     var task = currentTask();
     inputLabel.innerHTML = task.inputLabel + ":";
-    inputHint.innerHTML = task.inputHint;
+    inputPath.placeholder = task.inputHint;
     outputRow.className = task.hasOutput ? "row" : "row hidden";
-    outputHint.innerHTML = task.outputHint || "";
+    outputPath.placeholder = task.outputHint || "";
     packRow.className = task.isPack ? "row" : "row hidden";
     astRow.className = task.isAst ? "row" : "row hidden";
     status.innerHTML = "";
-    syncHints();
   }
 
   function appendLog(chunk) {
@@ -69,11 +63,23 @@
 
   var xhr = null;
 
+  function wantsFolder() {
+    var task = currentTask();
+    return (pickerMode === "input" && task.folder) || (pickerMode === "output" && task.folderOut);
+  }
+
   function openPicker(mode) {
     pickerMode = mode;
     picker.className = "picker";
-    pickerUse.style.display = (mode === "input" && currentTask().folder) || (mode === "output" && currentTask().folderOut) ? "inline" : "none";
-    loadFs(inputPath.value || outputPath.value || "");
+    var folder = wantsFolder();
+    pickerUse.style.display = "inline";
+    pickerUse.innerHTML = folder ? "Select this folder" : "Use this name";
+    pickerName.style.display = folder ? "none" : "inline";
+    if (!folder) {
+      pickerName.value = pickerMode === "output" && currentTask().isPack ? "out.rpk" : "out.rbc";
+    }
+    var start = pickerMode === "input" ? inputPath.value : outputPath.value;
+    loadFs(start || "");
   }
 
   function closePicker() {
@@ -88,7 +94,9 @@
       var data;
       try { data = JSON.parse(req.responseText); } catch (e) { return; }
       pickerCurrent = data.path || "";
-      pickerPath.innerHTML = pickerCurrent || "(drives)";
+      pickerParent = data.parent || "";
+      pickerPath.innerHTML = "";
+      pickerPath.appendChild(document.createTextNode(pickerCurrent || "(drives)"));
       pickerList.innerHTML = "";
       if (data.error) {
         var err = document.createElement("div");
@@ -101,18 +109,12 @@
       for (i = 0; i < entries.length; i++) {
         (function (ent) {
           var row = document.createElement("div");
-          row.innerHTML = (ent.dir ? "[dir] " : "") + ent.name;
+          row.appendChild(document.createTextNode((ent.dir ? "[dir] " : "") + ent.name));
           row.onclick = function () {
             if (ent.dir) {
               loadFs(ent.path);
-            } else if (pickerMode === "input" && !currentTask().folder) {
-              inputPath.value = ent.path;
-              closePicker();
-              syncHints();
-            } else if (pickerMode === "output" && currentTask().outputFile) {
-              outputPath.value = ent.path;
-              closePicker();
-              syncHints();
+            } else if (!wantsFolder()) {
+              choosePath(ent.path);
             }
           };
           pickerList.appendChild(row);
@@ -122,16 +124,24 @@
     req.send(null);
   }
 
+  function choosePath(path) {
+    if (pickerMode === "input") inputPath.value = path;
+    else outputPath.value = path;
+    closePicker();
+  }
+
   function run() {
     var task = currentTask();
     var input = inputPath.value.replace(/^\s+|\s+$/g, "");
     var output = outputPath.value.replace(/^\s+|\s+$/g, "");
     if (!input) {
       status.innerHTML = "pick the " + task.inputLabel.toLowerCase() + " first";
+      openPicker("input");
       return;
     }
     if (task.outputRequired && !output) {
       status.innerHTML = "pick the output first";
+      openPicker("output");
       return;
     }
     var args = [task.verb, input];
@@ -194,19 +204,22 @@
     taskEl.appendChild(opt);
   }
   taskEl.onchange = onTaskChosen;
-  inputPath.oninput = syncHints;
-  outputPath.oninput = syncHints;
   $("browse-input").onclick = function () { openPicker("input"); };
   $("browse-output").onclick = function () { openPicker("output"); };
   $("picker-cancel").onclick = closePicker;
-  $("picker-up").onclick = function () {
-    loadFs(pickerCurrent ? pickerCurrent.replace(/[\\\/][^\\\/]+[\\\/]?$/, "") : "");
-  };
+  $("picker-up").onclick = function () { loadFs(pickerParent); };
   $("picker-use").onclick = function () {
-    if (pickerMode === "input") inputPath.value = pickerCurrent;
-    else outputPath.value = pickerCurrent;
-    closePicker();
-    syncHints();
+    var path = pickerCurrent;
+    if (!wantsFolder()) {
+      var name = pickerName.value.replace(/^\s+|\s+$/g, "");
+      if (!name) return;
+      path = pickerCurrent ? pickerCurrent.replace(/[\\\/]$/, "") + "\\" + name : name;
+      if (pickerCurrent && pickerCurrent.charAt(0) === "/") {
+        path = pickerCurrent.replace(/\/$/, "") + "/" + name;
+      }
+    }
+    if (!path) return;
+    choosePath(path);
   };
   runBtn.onclick = run;
   $("clear").onclick = function () { logView.value = ""; };

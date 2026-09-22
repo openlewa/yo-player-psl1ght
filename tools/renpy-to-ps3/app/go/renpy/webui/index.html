@@ -17,8 +17,7 @@
       <div class="row">
         <label id="input-label">Game folder:</label>
         <div class="field">
-          <input id="input-path" type="text" />
-          <span id="input-hint" class="hint"></span>
+          <input id="input-path" type="text" placeholder="ren'py 'game' folder" />
         </div>
         <button id="browse-input" type="button">Browse...</button>
       </div>
@@ -26,8 +25,7 @@
       <div class="row" id="output-row">
         <label>Output:</label>
         <div class="field">
-          <input id="output-path" type="text" />
-          <span id="output-hint" class="hint"></span>
+          <input id="output-path" type="text" placeholder=".rpk file to output as" />
         </div>
         <button id="browse-output" type="button">Browse...</button>
       </div>
@@ -65,11 +63,13 @@
 
     <div id="picker" class="picker hidden">
       <div class="picker-box">
+        <div class="picker-help">Open a folder, then click Select this folder. One click opens a folder.</div>
         <div class="picker-path" id="picker-path"></div>
         <div class="picker-list" id="picker-list"></div>
         <div class="picker-actions">
           <button id="picker-up" type="button">Up</button>
-          <button id="picker-use" type="button">Use this folder</button>
+          <button id="picker-use" type="button">Select this folder</button>
+          <input id="picker-name" type="text" class="picker-name" />
           <button id="picker-cancel" type="button">Cancel</button>
         </div>
       </div>

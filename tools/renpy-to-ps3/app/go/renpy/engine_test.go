@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -287,6 +288,37 @@ func TestScanClassesNullMemoDoesNotShift(t *testing.T) {
 	}
 	if _, ok := classes["ast.ast"]; ok {
 		t.Fatal("null memo replayed ast as a second string")
+	}
+}
+
+func TestImageArgsSingleFrame(t *testing.T) {
+	args := imageArgs("doc/_static/ajax-loader.gif", "out.png", "scale=8:8")
+	got := strings.Join(args, " ")
+	if !strings.Contains(got, "-frames:v 1") || !strings.Contains(got, "-update 1") {
+		t.Fatal(args)
+	}
+	if args[len(args)-1] != "out.png" {
+		t.Fatal(args)
+	}
+}
+
+func TestGifToPng(t *testing.T) {
+	ff, err := NewFfmpeg("")
+	if err != nil {
+		t.Skip("ffmpeg:", err)
+	}
+	dir := t.TempDir()
+	gifPath := filepath.Join(dir, "ajax-loader.gif")
+	pngPath := filepath.Join(dir, "out.png")
+	if out, err := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=blue:s=8x8", "-frames:v", "4", gifPath).CombinedOutput(); err != nil {
+		t.Fatalf("make gif: %v\n%s", err, out)
+	}
+	ok, errText := ff.Image(gifPath, pngPath, 1920, 1920)
+	if !ok {
+		t.Fatal(errText)
+	}
+	if st, err := os.Stat(pngPath); err != nil || st.Size() == 0 {
+		t.Fatal(err, st)
 	}
 }
 

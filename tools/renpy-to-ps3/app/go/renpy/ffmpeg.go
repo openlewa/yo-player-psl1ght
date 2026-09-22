@@ -105,15 +105,26 @@ func uniformScale(factor float64, even bool) string {
 	return "scale=trunc(iw*" + f + "):trunc(ih*" + f + ")"
 }
 
+// imageArgs writes exactly one still. Animated GIFs otherwise hit ffmpeg's
+// image2 error: "Cannot write more than one file with the same name".
+func imageArgs(inp, outp, vf string) []string {
+	args := []string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp}
+	if vf != "" {
+		args = append(args, "-vf", vf)
+	}
+	return append(args, "-frames:v", "1", "-update", "1", outp)
+}
+
 func (ff *Ffmpeg) Image(inp, outp string, maxW, maxH int) (bool, string) {
-	return ff.Run([]string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp, "-vf", scaleFilter(maxW, maxH), outp}, 10*time.Minute)
+	return ff.Run(imageArgs(inp, outp, scaleFilter(maxW, maxH)), 10*time.Minute)
 }
 
 func (ff *Ffmpeg) ImageScaled(inp, outp string, factor float64) (bool, string) {
-	if factor >= 1.0 {
-		return ff.Run([]string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp, outp}, 10*time.Minute)
+	vf := ""
+	if factor < 1.0 {
+		vf = uniformScale(factor, false)
 	}
-	return ff.Run([]string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp, "-vf", uniformScale(factor, false), outp}, 10*time.Minute)
+	return ff.Run(imageArgs(inp, outp, vf), 10*time.Minute)
 }
 
 func (ff *Ffmpeg) Audio(inp, outp string) (bool, string) {
