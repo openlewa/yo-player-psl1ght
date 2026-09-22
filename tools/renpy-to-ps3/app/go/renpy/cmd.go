@@ -102,6 +102,8 @@ func Run(args []string) (code int) {
 			return 1
 		}
 		return rpkCommand(args[1])
+	case "ui":
+		return uiCommand(args[1:])
 	default:
 		errln("error: unknown command '" + cmd + "'")
 		printUsage()
@@ -120,6 +122,7 @@ func printUsage() {
 	logln("  pack <game-dir> <out.rpk> [--max <px>]  Convert + compile + bundle")
 	logln("       [--no-cache] [--clear-cache]       Asset cache: bypass / wipe-then-rebuild")
 	logln("  rpk <file>                              Inspect an .rpk bundle")
+	logln("  ui [--port N]                           Local web UI (Windows 7 / any browser)")
 	logln()
 }
 

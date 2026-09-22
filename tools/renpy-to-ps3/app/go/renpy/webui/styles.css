@@ -1,0 +1,188 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #1e1e1e;
+  color: #cccccc;
+  font: 12px/1.4 "Segoe UI", Tahoma, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+}
+
+.row {
+  display: table;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.row > label:first-child,
+.row > .field,
+.row > button,
+.row > select,
+.row > .pack-opts,
+.row > input.short {
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.row > label:first-child {
+  width: 120px;
+  text-align: right;
+  color: #707070;
+  padding-right: 8px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+select,
+input[type="text"],
+button,
+textarea {
+  background: #2d2d2d;
+  color: #cccccc;
+  border: 1px solid #3f3f3f;
+  font: inherit;
+}
+
+select,
+input[type="text"] {
+  height: 24px;
+  padding: 0 6px;
+}
+
+select {
+  width: 280px;
+}
+
+.field {
+  position: relative;
+  width: 99%;
+}
+
+.field input {
+  width: 100%;
+}
+
+.hint {
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  color: #707070;
+  pointer-events: none;
+}
+
+.num {
+  width: 52px;
+}
+
+.short {
+  width: 200px;
+}
+
+.pack-opts label {
+  margin-left: 10px;
+  color: #cccccc;
+}
+
+.dim {
+  color: #707070;
+}
+
+button {
+  padding: 4px 10px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+button:hover {
+  background: #3e3e3e;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#run {
+  width: 90px;
+  margin-left: 0;
+}
+
+#log {
+  flex: 1;
+  min-height: 160px;
+  resize: none;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  padding: 6px;
+  white-space: pre;
+  overflow: auto;
+  width: 100%;
+}
+
+.footer {
+  margin-bottom: 0;
+}
+
+#status {
+  padding-left: 12px;
+}
+
+.picker {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.picker-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 520px;
+  height: 360px;
+  margin-left: -260px;
+  margin-top: -180px;
+  background: #2d2d2d;
+  border: 1px solid #3f3f3f;
+  padding: 10px;
+}
+
+.picker-path {
+  color: #707070;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+.picker-list {
+  height: 280px;
+  overflow: auto;
+  border: 1px solid #3f3f3f;
+  background: #1e1e1e;
+}
+
+.picker-list div {
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.picker-list div:hover {
+  background: #3e3e3e;
+}
+
+.picker-actions {
+  margin-top: 8px;
+}

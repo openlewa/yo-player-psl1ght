@@ -13,7 +13,7 @@ plus a thin TypeScript/Tauri shell around it.
 
 ## Prerequisites
 
-- [Go](https://go.dev/) 1.22+ (Windows 7: Go **1.20.14** — see below)
+- [Go](https://go.dev/) 1.20+ (Windows 7: **1.20.14** only — see below)
 - [Rust](https://rustup.rs/) (desktop app only)
 - Node.js 18+ (desktop app only)
 - ffmpeg
@@ -67,31 +67,46 @@ If `ffmpeg` is not on `PATH`, copy `tools\renpy-to-ps3\ffmpeg.exe` next to `renp
 
 ## Start on Windows 7
 
-The Tauri desktop window does **not** run on Windows 7. Current Node, Go 1.21+, and recent Rust/WebView2 dropped that OS. Use the **Go CLI** instead (still no Visual Studio / MSBuild).
+Windows 7 SP1 is supported through the **Go CLI + local web UI**. The Tauri window is Windows 10/11 only (Node, Rust, and current WebView2 dropped Windows 7). Visual Studio and MSBuild are not required.
 
 ### One-time installs
 
 1. [Go 1.20.14](https://go.dev/dl/go1.20.14.windows-amd64.msi) — last Go that still targets Windows 7. Do **not** install 1.21+.
-2. ffmpeg — use `tools\renpy-to-ps3\ffmpeg.exe` (already in this repo). Copy it next to the CLI binary after you build.
+2. A browser that still runs on Windows 7 (Chrome 109 or Firefox 115 ESR).
+3. ffmpeg — `tools\renpy-to-ps3\ffmpeg.exe` is already in this repo.
 
-You do not need Node, Rust, or WebView2 on Windows 7.
+You do **not** need Node, Rust, WebView2, or Visual Studio on Windows 7.
 
-### Build and run the CLI
+### Desktop-style UI (recommended)
 
-Open **Command Prompt**:
+Double-click `tools\renpy-to-ps3\app\start-windows7.bat`, or in Command Prompt:
+
+```bat
+cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app
+start-windows7.bat
+```
+
+That builds `renpy-to-ps3.exe` (if needed), copies `ffmpeg.exe` beside it, and opens **http://127.0.0.1:8765/** in your browser. The page is the same task list / log pane as the WPF and Tauri apps. Close the console window to quit.
+
+Or:
 
 ```bat
 cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
 go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3
 copy /Y ..\..\ffmpeg.exe .\ffmpeg.exe
+renpy-to-ps3.exe ui
+```
+
+### CLI only
+
+```bat
+cd /d path\to\yo-player-psl1ght\tools\renpy-to-ps3\app\go
 renpy-to-ps3.exe pack C:\Games\MyNovel\game C:\out.rpk
 ```
 
 `game` must be the Ren'Py **game** folder (the one that contains `.rpyc` / `.rpa` files), not the project root.
 
-Optional: build the same `.exe` on a Windows 11 PC with Go 1.20.14 (`go build -o renpy-to-ps3.exe .\cmd\renpy-to-ps3`) and copy `renpy-to-ps3.exe` plus `ffmpeg.exe` onto the Windows 7 machine.
-
-A `.exe` built with Go 1.22+ or a Tauri installer built on Windows 11 will not start on Windows 7.
+A `.exe` built with Go 1.22+ will not start on Windows 7. If you build on Windows 11 for the VM, install Go 1.20.14 there and copy `renpy-to-ps3.exe` plus `ffmpeg.exe`.
 
 ## Start on Linux / macOS
 
@@ -123,4 +138,5 @@ rpk <file>
 script <rpyc>
 ast <rpyc> [label]
 atldump <rpyc>
+ui [--port N]
 ```
