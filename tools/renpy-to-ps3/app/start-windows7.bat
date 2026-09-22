@@ -4,7 +4,7 @@ cd /d "%~dp0go"
 
 where go >nul 2>&1
 if errorlevel 1 (
-  echo Install Go 1.20.14 ^(Windows 7 needs this exact series^):
+  echo Install Go. Windows 7 needs 1.20.14. Windows 11 can use 1.20.14 or newer:
   echo   https://go.dev/dl/go1.20.14.windows-amd64.msi
   exit /b 1
 )
