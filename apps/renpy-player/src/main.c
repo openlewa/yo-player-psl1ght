@@ -8,6 +8,7 @@
 #include "font.h"
 #include "screen-manager.h"
 #include "screens/home.h"
+#include "assets.h"   // tickGifClips
 #include "bridge-client.h"
 #include "dbg.h"
 
@@ -41,6 +42,7 @@ int main(int argc, char **argv)
       updatePad();
       updateScreen();
 
+      tickGifClips();
       beginGfxFrame();
       drawScreen();
       endGfxFrame();

@@ -9,6 +9,7 @@
 #include "dbg.h"
 #include "ui/slice.h"
 #include "rpk.h"
+#include "assets.h"   // loadBundleImage / freeAssetTexture (GIF frames)
 
 Gui gui;
 
@@ -38,7 +39,7 @@ static int loadGuiImage(RpkFile *r, const char *base, GfxTexture *out)
    char name[256];
    unsigned char *buf = NULL; long len = 0;
    if (readRpkEntrySuffix(r, suffix, 0, name, sizeof name, &buf, &len) != 0 || !buf) return 0;
-   *out = loadGfxTextureMem(buf, (uint32_t)len);
+   *out = loadBundleImage(buf, (uint32_t)len);
    free(buf);
    return out->w > 0 && out->h > 0;
 }
@@ -297,12 +298,12 @@ void loadGui(const char *rpkPath)
 
 void freeGui(void)
 {
-   if (gui.frameLoaded)  { freeGfxTexture(&gui.frameTex);  gui.frameLoaded = 0; }
-   if (gui.choiceLoaded) { freeGfxTexture(&gui.choiceTex); gui.choiceLoaded = 0; }
-   if (gui.hoverLoaded)  { freeGfxTexture(&gui.hoverTex);  gui.hoverLoaded = 0; }
-   if (gui.ctcLoaded)    { freeGfxTexture(&gui.ctcTex);    gui.ctcLoaded = 0; }
-   if (gui.igLoaded)     { freeGfxTexture(&gui.igTex);     gui.igLoaded = 0; }
-   if (gui.whoLoaded)    { freeGfxTexture(&gui.whoTex);    gui.whoLoaded = 0; }
+   if (gui.frameLoaded)  { freeAssetTexture(&gui.frameTex);  gui.frameLoaded = 0; }
+   if (gui.choiceLoaded) { freeAssetTexture(&gui.choiceTex); gui.choiceLoaded = 0; }
+   if (gui.hoverLoaded)  { freeAssetTexture(&gui.hoverTex);  gui.hoverLoaded = 0; }
+   if (gui.ctcLoaded)    { freeAssetTexture(&gui.ctcTex);    gui.ctcLoaded = 0; }
+   if (gui.igLoaded)     { freeAssetTexture(&gui.igTex);     gui.igLoaded = 0; }
+   if (gui.whoLoaded)    { freeAssetTexture(&gui.whoTex);    gui.whoLoaded = 0; }
 }
 
 const GuiSideImage *getGuiSideImage(const char *who)

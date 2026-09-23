@@ -20,12 +20,12 @@ static MmButton   mmBtn[GUI_MMBTN_MAX]; static int mmBtnN;
 
 void freeMainMenu(void)
 {
-   if (mmBgLoaded) { freeGfxTexture(&mmBgTex); mmBgLoaded = 0; }
-   if (mmFrameLoaded) { freeGfxTexture(&mmFrameTex); mmFrameLoaded = 0; }
+   if (mmBgLoaded) { freeAssetTexture(&mmBgTex); mmBgLoaded = 0; }
+   if (mmFrameLoaded) { freeAssetTexture(&mmFrameTex); mmFrameLoaded = 0; }
    for (int i = 0; i < mmBtnN; i++)
    {
-      freeGfxTexture(&mmBtn[i].idle);
-      if (mmBtn[i].hasHover) freeGfxTexture(&mmBtn[i].hover);
+      freeAssetTexture(&mmBtn[i].idle);
+      if (mmBtn[i].hasHover) freeAssetTexture(&mmBtn[i].hover);
    }
    mmBtnN = 0;
 }

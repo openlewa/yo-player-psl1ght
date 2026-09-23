@@ -88,4 +88,4 @@ ui [--port N]
 
 `--max` is the screen the pictures must fit inside. The page offers `1920x1080` (default, PS3/PS4 Full-HD), `1280x720` (PS3 HD-Ready), `768x576` (PS2 SD PAL) and `720x480` (PS2 SD NTSC). A single number, such as `--max 1280`, still means that many pixels on both edges.
 
-Animated GIF files, including a spinner such as `ajax-loader.gif`, are stored under the same name as one PNG frame. The player finds that name and decodes the PNG. It does not play the animation: it decodes a still PNG or JPEG into one texture, and Motion JPEG would not animate either. The JPEG decoder reads a single picture, and the player has no movie path for image assets.
+Animated GIF files, including a spinner such as `ajax-loader.gif`, stay GIFs. This branch's renpy-player decodes the frames and loops them. Motion JPEG is not used: the player has no movie path for image assets, and the JPEG decoder reads one picture.

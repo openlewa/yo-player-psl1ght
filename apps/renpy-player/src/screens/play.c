@@ -249,7 +249,7 @@ static const char *imBaseName(const char *path)
 static void freeImageMap(void)
 {
    for (int i = 0; i < IM_NTEX; i++)
-      if (imTexOk[i]) { freeGfxTexture(&imTex[i]); imTexOk[i] = 0; }
+      if (imTexOk[i]) { freeAssetTexture(&imTex[i]); imTexOk[i] = 0; }
    imMap = NULL;
 }
 
@@ -412,7 +412,7 @@ static int ovGetTex(const char *file, GfxTexture *out)
 }
 static void freeOverlays(void)
 {
-   for (int i = 0; i < ovTexCacheN; i++) if (ovTexCache[i].ok) freeGfxTexture(&ovTexCache[i].tex);
+   for (int i = 0; i < ovTexCacheN; i++) if (ovTexCache[i].ok) freeAssetTexture(&ovTexCache[i].tex);
    ovTexCacheN = 0;
    activeOverlayCount = 0;
 }
@@ -984,7 +984,7 @@ static void drawSideImage(int cx, int cy, int cw, int ch)
    if (!img) return;
    if (strcmp(sideTexName, img) != 0)   // changed -> (re)load
    {
-      if (sideTexOk) { freeGfxTexture(&sideTex); sideTexOk = 0; }
+      if (sideTexOk) { freeAssetTexture(&sideTex); sideTexOk = 0; }
       sideTexOk = loadAssetTexture(img, &sideTex);
       snprintf(sideTexName, sizeof sideTexName, "%s", img);
    }
@@ -1055,8 +1055,8 @@ static void termPlay(void)
    freeGui();
    if (fontReady) { closeFont(&font); fontReady = 0; }
    if (igFontReady) { closeFont(&igFont); igFontReady = 0; }
-   if (spriteSheetOk) { freeGfxTexture(&spriteSheet); spriteSheetOk = 0; }
-   if (sideTexOk) { freeGfxTexture(&sideTex); sideTexOk = 0; sideTexName[0] = '\0'; }
+   if (spriteSheetOk) { freeAssetTexture(&spriteSheet); spriteSheetOk = 0; }
+   if (sideTexOk) { freeAssetTexture(&sideTex); sideTexOk = 0; sideTexName[0] = '\0'; }
    if (loaded) { freeRbc(&prog); loaded = 0; }
    resetVars();
    logInfo("[rpp] play: term\n");
