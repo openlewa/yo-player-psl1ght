@@ -27,8 +27,18 @@ void initAssets(const RbcProgram *p);
 void freeAssets(void);
 
 // Reads a bundled asset (by basename) and decodes it straight from memory into *out.
-// Returns 1 on success.
+// PNG and JPEG become one texture. An animated GIF keeps every frame and is
+// advanced by tickGifClips. Returns 1 on success.
 int loadAssetTexture(const char *base, GfxTexture *out);
+
+// Decode one bundled image already in memory (PNG, JPEG, or GIF).
+GfxTexture loadBundleImage(const void *data, uint32_t size);
+
+// Releases a texture from loadAssetTexture / loadBundleImage, including its GIF frames.
+void freeAssetTexture(GfxTexture *tex);
+
+// Uploads the GIF frame that should be visible now. Call once per displayed frame.
+void tickGifClips(void);
 
 // Resolve a scene image name to its file and load it as the background (cached by file).
 void resolveScene(const RbcProgram *p, const char *sceneName);

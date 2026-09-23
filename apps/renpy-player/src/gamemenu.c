@@ -100,7 +100,7 @@ const char *getGameMenuSelectedSlot(void) { return selectedSlot; }
 void        refreshGameMenuSlots(void)   // next draw re-reads the save folder (after a save)
 {
    slotsBuilt = 0;
-   if (thumbLoaded) { freeGfxTexture(&thumbTex); thumbLoaded = 0; }
+   if (thumbLoaded) { freeAssetTexture(&thumbTex); thumbLoaded = 0; }
    thumbSlot[0] = '\0';   // force the just-saved slot's thumbnail to rebuild from the new save
    lsRefresh();           // imagemap picker: re-read saves + newest
 }
@@ -109,21 +109,21 @@ void initGameMenu(Font *sharedFont) { font = sharedFont; }
 
 void freeGameMenu(void)
 {
-   if (gmBgLoaded)  { freeGfxTexture(&gmBgTex);  gmBgLoaded = 0; }
-   if (frameLoaded) { freeGfxTexture(&frameTex); frameLoaded = 0; }
-   if (barLoaded)      { freeGfxTexture(&barTex);      barLoaded = 0; }
-   if (barThumbLoaded) { freeGfxTexture(&barThumbTex); barThumbLoaded = 0; }
+   if (gmBgLoaded)  { freeAssetTexture(&gmBgTex);  gmBgLoaded = 0; }
+   if (frameLoaded) { freeAssetTexture(&frameTex); frameLoaded = 0; }
+   if (barLoaded)      { freeAssetTexture(&barTex);      barLoaded = 0; }
+   if (barThumbLoaded) { freeAssetTexture(&barThumbTex); barThumbLoaded = 0; }
    for (int i = 0; i < navCount; i++)
    {
-      if (nav[i].hasIdle)        freeGfxTexture(&nav[i].idle);
-      if (nav[i].hasHover)       freeGfxTexture(&nav[i].hover);
-      if (nav[i].hasSelected)    freeGfxTexture(&nav[i].selected);
-      if (nav[i].hasInsensitive) freeGfxTexture(&nav[i].insensitive);
+      if (nav[i].hasIdle)        freeAssetTexture(&nav[i].idle);
+      if (nav[i].hasHover)       freeAssetTexture(&nav[i].hover);
+      if (nav[i].hasSelected)    freeAssetTexture(&nav[i].selected);
+      if (nav[i].hasInsensitive) freeAssetTexture(&nav[i].insensitive);
       freeTextTexture(&nav[i].text);
    }
    freeTextTexture(&confirmTex); freeTextTexture(&yesTex); freeTextTexture(&noTex);
    for (int i = 0; i < slotCount; i++) freeTextTexture(&slot[i].tex);
-   if (thumbLoaded) { freeGfxTexture(&thumbTex); thumbLoaded = 0; }
+   if (thumbLoaded) { freeAssetTexture(&thumbTex); thumbLoaded = 0; }
    thumbSlot[0] = '\0';
    lsFree();
    navCount = 0;
@@ -308,7 +308,7 @@ static void ensureThumb(const char *display)
 {
    if (strcmp(thumbSlot, display) == 0) return;
    snprintf(thumbSlot, sizeof thumbSlot, "%s", display);
-   if (thumbLoaded) { freeGfxTexture(&thumbTex); thumbLoaded = 0; }
+   if (thumbLoaded) { freeAssetTexture(&thumbTex); thumbLoaded = 0; }
    if (!display[0]) return;
 
    char path[256]; saveThumbPath(display, path, sizeof path);
@@ -544,7 +544,7 @@ static void lsFreeSlots(void)
 {
    for (int i = 0; i < 16; i++) {
       if (lsSlot[i].tex.valid) freeTextTexture(&lsSlot[i].tex);
-      if (lsSlot[i].thumbOk) { freeGfxTexture(&lsSlot[i].thumb); lsSlot[i].thumbOk = 0; }
+      if (lsSlot[i].thumbOk) { freeAssetTexture(&lsSlot[i].thumb); lsSlot[i].thumbOk = 0; }
    }
    lsSlotsValid = 0;
 }
@@ -604,7 +604,7 @@ static void lsEnter(void)
 
 static void lsFree(void)
 {
-   for (int i = 0; i < 5; i++) if (lsTexOk[i]) { freeGfxTexture(&lsTex[i]); lsTexOk[i] = 0; }
+   for (int i = 0; i < 5; i++) if (lsTexOk[i]) { freeAssetTexture(&lsTex[i]); lsTexOk[i] = 0; }
    lsFreeSlots();
    lsImap = NULL;
 }
@@ -637,7 +637,7 @@ static void lsBuildSlots(int cw)
       else
          snprintf(line, sizeof line, "%s. Empty Slot.", disp);
       // file_picker_ss_window: the slot's saved screenshot (no thumbnail for empty / no-PNG saves).
-      if (lsSlot[o].thumbOk) { freeGfxTexture(&lsSlot[o].thumb); lsSlot[o].thumbOk = 0; }
+      if (lsSlot[o].thumbOk) { freeAssetTexture(&lsSlot[o].thumb); lsSlot[o].thumbOk = 0; }
       if (lsSlot[o].occupied) {
          char tp[256]; saveThumbPath(fn, tp, sizeof tp);
          GfxTexture t = loadGfxTexture(tp);

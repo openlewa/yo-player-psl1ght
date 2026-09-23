@@ -11,6 +11,7 @@
 #include "gui.h"        // gui.dlgFont (converter-resolved dialogue font)
 #include "rpk.h"
 #include "colors.h"   // parseColor (for Solid-colour scenes like `black`)
+#include "gifdec.h"
 
 // ---- image-name -> displayable map (from IMAGE ops) ----
 // An image def is either a FILE (`image bg = "alley.jpg"`) or a SOLID colour
@@ -108,7 +109,7 @@ void initAssets(const RbcProgram *p)
 void freeAssets(void)
 {
    clearSprites();
-   if (bgLoaded) { freeGfxTexture(&bgTex); bgLoaded = 0; }
+   if (bgLoaded) { freeAssetTexture(&bgTex); bgLoaded = 0; }
    bgIsSolid = 0;
    imgCount = 0;
 }
@@ -128,6 +129,106 @@ static int resolveImageSolid(const char *name, uint32_t *out)
    return 0;
 }
 
+#define GIF_CLIPS 32
+
+typedef struct {
+   int used;
+   uint32_t offset;
+   int w, h, count, shown;
+   int *delayMs;
+   uint8_t *argb;
+   uint64_t startUs;
+} GifClip;
+
+static GifClip gifClips[GIF_CLIPS];
+
+static void gifClipRelease(uint32_t offset)
+{
+   if (offset == 0) return;
+   for (int i = 0; i < GIF_CLIPS; i++)
+   {
+      if (!gifClips[i].used || gifClips[i].offset != offset) continue;
+      free(gifClips[i].delayMs);
+      free(gifClips[i].argb);
+      memset(&gifClips[i], 0, sizeof gifClips[i]);
+      return;
+   }
+}
+
+static void gifClipAdd(uint32_t offset, GifAnim *anim)
+{
+   if (!anim || anim->count < 2 || offset == 0) return;
+   for (int i = 0; i < GIF_CLIPS; i++)
+   {
+      if (gifClips[i].used) continue;
+      gifClips[i].used = 1;
+      gifClips[i].offset = offset;
+      gifClips[i].w = anim->w;
+      gifClips[i].h = anim->h;
+      gifClips[i].count = anim->count;
+      gifClips[i].shown = 0;
+      gifClips[i].delayMs = anim->delayMs;
+      gifClips[i].argb = anim->argb;
+      gifClips[i].startUs = sys_time_get_system_time();
+      anim->delayMs = NULL;
+      anim->argb = NULL;
+      return;
+   }
+   logWarn("[rpp] gif: clip table full, showing the first frame only\n");
+}
+
+void tickGifClips(void)
+{
+   uint64_t now = sys_time_get_system_time();
+   int stalled = 0;
+   for (int i = 0; i < GIF_CLIPS; i++)
+   {
+      GifClip *c = &gifClips[i];
+      if (!c->used) continue;
+      int ms = (int)((now - c->startUs) / 1000ull);
+      int idx = gifFrameAt(c->delayMs, c->count, ms);
+      if (idx == c->shown) continue;
+      if (!stalled) { finishGfx(); stalled = 1; }
+      updateGfxTexture(c->offset, c->argb + (size_t)idx * (size_t)c->w * (size_t)c->h * 4,
+                       c->w, c->h, c->w * 4, c->w, c->h);
+      c->shown = idx;
+   }
+}
+
+void freeAssetTexture(GfxTexture *tex)
+{
+   if (tex) gifClipRelease(tex->offset);
+   freeGfxTexture(tex);
+}
+
+GfxTexture loadBundleImage(const void *data, uint32_t size)
+{
+   GfxTexture zero = { 0, 0, 0, 0 };
+   const unsigned char *b = (const unsigned char *)data;
+   if (size >= 6 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F' && b[3] == '8' &&
+       (b[4] == '7' || b[4] == '9') && b[5] == 'a')
+   {
+      GifAnim anim;
+      if (gifDecode(b, (int)size, &anim) != 0)
+      {
+         logWarn("[rpp] gif: decode failed\n");
+         return zero;
+      }
+      uint32_t offset = uploadGfxTexture(anim.argb, anim.w, anim.h, anim.w * 4);
+      if (offset == 0) { gifFree(&anim); return zero; }
+      GfxTexture t;
+      t.offset = offset;
+      t.w = anim.w;
+      t.h = anim.h;
+      t.pitch = (int)(((uint32_t)(anim.w * 4) + 63) & ~63u);
+      logInfo("[rpp] gif: %d frames %dx%d\n", anim.count, anim.w, anim.h);
+      gifClipAdd(offset, &anim);
+      gifFree(&anim);
+      return t;
+   }
+   return loadGfxTextureMem(data, size);
+}
+
 int loadAssetTexture(const char *base, GfxTexture *out)
 {
    RpkFile r;
@@ -141,7 +242,7 @@ int loadAssetTexture(const char *base, GfxTexture *out)
    closeRpk(&r);
    if (rc != 0 || !buf) { logWarn("[rpp] img: %s not in bundle\n", base); return 0; }
 
-   GfxTexture t = loadGfxTextureMem(buf, (uint32_t)len);   // decode from memory (PNG/JPEG)
+   GfxTexture t = loadBundleImage(buf, (uint32_t)len);   // PNG, JPEG, or animated GIF
    free(buf);
    if (t.offset == 0) { logWarn("[rpp] img: decode failed %s\n", name); return 0; }
    *out = t;
@@ -156,7 +257,7 @@ static void loadBg(const char *file)
 
    GfxTexture t;
    if (!loadAssetTexture(base, &t)) return;
-   if (bgLoaded) freeGfxTexture(&bgTex);
+   if (bgLoaded) freeAssetTexture(&bgTex);
    bgTex = t;
    bgLoaded = 1;
    bgIsSolid = 0;
@@ -176,7 +277,7 @@ static int solidColorFor(const char *name, uint32_t *out)
 // Switches the background to a Solid colour fill (releasing any image texture).
 static void setSolidBg(uint32_t color)
 {
-   if (bgLoaded) freeGfxTexture(&bgTex);
+   if (bgLoaded) freeAssetTexture(&bgTex);
    bgLoaded = 0;
    bgIsSolid = 1;
    bgSolidColor = color;
@@ -217,7 +318,7 @@ int getBgSolid(uint32_t *colorOut)
 
 void clearSprites(void)
 {
-   for (int i = 0; i < sprCount; i++) freeGfxTexture(&sprites[i].tex);
+   for (int i = 0; i < sprCount; i++) freeAssetTexture(&sprites[i].tex);
    sprCount = 0;
 }
 
@@ -228,7 +329,7 @@ void hideSprite(const char *name)
    for (int i = 0; i < sprCount; i++)
       if (strcmp(sprites[i].tag, tag) == 0)
       {
-         freeGfxTexture(&sprites[i].tex);
+         freeAssetTexture(&sprites[i].tex);
          sprites[i] = sprites[sprCount - 1];   // swap-remove
          sprCount--;
          return;
@@ -313,10 +414,10 @@ void showSprite(const RbcProgram *p, const char *name, const char *at, int atlId
    int isNew = (slot < 0);
    if (isNew)
    {
-      if (sprCount >= SPR_MAX) { freeGfxTexture(&t); logWarn("[rpp] sprite slots full\n"); return; }
+      if (sprCount >= SPR_MAX) { freeAssetTexture(&t); logWarn("[rpp] sprite slots full\n"); return; }
       slot = sprCount++;
    }
-   else freeGfxTexture(&sprites[slot].tex);   // replacing the same tag with a different image
+   else freeAssetTexture(&sprites[slot].tex);   // replacing the same tag with a different image
 
    sprites[slot].tex = t;
    sprites[slot].src = name;   // stable pointer into the bytecode string table

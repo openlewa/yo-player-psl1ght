@@ -116,6 +116,27 @@ func imageArgs(inp, outp, vf string) []string {
 	return append(args, "-frames:v", "1", "-update", "1", outp)
 }
 
+// gifArgs keeps every frame. The PS3 player loops a real GIF; a single PNG frame does not.
+func gifArgs(inp, outp, vf string) []string {
+	args := []string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp}
+	if vf != "" {
+		args = append(args, "-vf", vf)
+	}
+	return append(args, "-loop", "0", outp)
+}
+
+func (ff *Ffmpeg) Gif(inp, outp string, maxW, maxH int) (bool, string) {
+	return ff.Run(gifArgs(inp, outp, scaleFilter(maxW, maxH)), 10*time.Minute)
+}
+
+func (ff *Ffmpeg) GifScaled(inp, outp string, factor float64) (bool, string) {
+	vf := ""
+	if factor < 1.0 {
+		vf = uniformScale(factor, false)
+	}
+	return ff.Run(gifArgs(inp, outp, vf), 10*time.Minute)
+}
+
 func (ff *Ffmpeg) Image(inp, outp string, maxW, maxH int) (bool, string) {
 	return ff.Run(imageArgs(inp, outp, scaleFilter(maxW, maxH)), 10*time.Minute)
 }

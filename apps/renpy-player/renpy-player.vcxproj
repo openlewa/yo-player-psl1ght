@@ -55,6 +55,7 @@
    <ClCompile Include="src\vars.c" />
    <ClCompile Include="src\gui.c" />
    <ClCompile Include="src\assets.c" />
+   <ClCompile Include="src\gifdec.c" />
    <ClCompile Include="src\sound.c" />
    <ClCompile Include="src\typewriter.c" />
    <ClCompile Include="src\mainmenu.c" />
@@ -78,6 +79,7 @@
    <ClInclude Include="include\gui.h" />
    <ClInclude Include="include\sprite-regions.h" />
    <ClInclude Include="include\assets.h" />
+   <ClInclude Include="include\gifdec.h" />
    <ClInclude Include="include\sound.h" />
    <ClInclude Include="include\typewriter.h" />
    <ClInclude Include="include\mainmenu.h" />

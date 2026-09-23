@@ -423,6 +423,79 @@ func TestGifPackKeepsScriptName(t *testing.T) {
 	if !found {
 		t.Fatalf("missing assets/ajax-loader.gif in %v", names)
 	}
+	raw := readRpkEntry(t, outRpk, "assets/ajax-loader.gif")
+	src, err := os.ReadFile(gifPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) < 6 || string(raw[:3]) != "GIF" {
+		t.Fatalf("packed gif magic %q", raw[:6])
+	}
+	if string(raw) != string(src) {
+		t.Fatal("small gif should pass through unchanged")
+	}
+}
+
+func readRpkEntry(t *testing.T, path, name string) []byte {
+	t.Helper()
+	toc, err := ReadRpkToc(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ent *RpkTocEntry
+	for i := range toc {
+		if toc[i].Name == name {
+			ent = &toc[i]
+			break
+		}
+	}
+	if ent == nil {
+		t.Fatalf("missing %s", name)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	buf := make([]byte, ent.Length)
+	if _, err := f.ReadAt(buf, ent.Offset); err != nil {
+		t.Fatal(err)
+	}
+	return buf
+}
+
+func TestGifScaleKeepsFrames(t *testing.T) {
+	ff, err := NewFfmpeg("")
+	if err != nil {
+		t.Skip("ffmpeg:", err)
+	}
+	dir := t.TempDir()
+	in := filepath.Join(dir, "in.gif")
+	out := filepath.Join(dir, "out.gif")
+	if log, err := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=16x16:r=10:d=0.4",
+		"-vf", "format=rgb24,geq=r='if(eq(N,0),255,0)':g='if(eq(N,0),0,255)':b=0'",
+		"-frames:v", "2", in).CombinedOutput(); err != nil {
+		t.Fatalf("make gif: %v\n%s", err, log)
+	}
+	ok, errText := ff.Gif(in, out, 8, 8)
+	if !ok {
+		t.Fatal(errText)
+	}
+	probe, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
+		"-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", out).CombinedOutput()
+	if err != nil {
+		t.Fatalf("ffprobe: %v\n%s", err, probe)
+	}
+	if strings.TrimSpace(string(probe)) != "2" {
+		t.Fatalf("scaled gif frames %q", probe)
+	}
+}
+
+func TestGifArgsKeepFrames(t *testing.T) {
+	got := strings.Join(gifArgs("a.gif", "b.gif", "scale=8:8"), " ")
+	if strings.Contains(got, "-frames:v") || !strings.Contains(got, "-loop 0") {
+		t.Fatal(got)
+	}
 }
 
 func TestScanClassesTruncated(t *testing.T) {
