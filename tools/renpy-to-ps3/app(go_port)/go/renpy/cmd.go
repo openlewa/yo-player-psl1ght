@@ -92,7 +92,7 @@ func Run(args []string) (code int) {
 		return compileCommand(args[1], full, outRbc)
 	case "pack":
 		if len(args) < 3 {
-			errln("usage: renpy-to-ps3 pack <game-dir> <out.rpk> [--max <px>] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache]")
+			errln("usage: renpy-to-ps3 pack <game-dir> <out.rpk> [--max WxH] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache]")
 			return 1
 		}
 		return packCommand(args)
@@ -119,7 +119,7 @@ func printUsage() {
 	logln("  extract <rpa-file> <output>             Extract archive")
 	logln("  info <game-dir>                         Show construct compatibility")
 	logln("  compile <rpyc|game-dir> [out.rbc]       Compile to IR / bytecode")
-	logln("  pack <game-dir> <out.rpk> [--max <px>]  Convert + compile + bundle")
+	logln("  pack <game-dir> <out.rpk> [--max WxH]   Convert + compile + bundle")
 	logln("       [--no-cache] [--clear-cache]       Asset cache: bypass / wipe-then-rebuild")
 	logln("  rpk <file>                              Inspect an .rpk bundle")
 	logln("  ui [--port N]                           Local web UI (Windows 7 / any browser)")
@@ -466,16 +466,23 @@ func shapeState(state any) string {
 func packCommand(args []string) int {
 	gameDir, outRpk := args[1], args[2]
 	var err error
-	maxDim := 1920
+	maxW, maxH := 1920, 1080
 	ffmpegPath := ""
 	asciiText, useCache, clearCache := false, true, false
 	for i := 3; i < len(args); i++ {
 		switch args[i] {
 		case "--max":
-			if i+1 < len(args) {
-				i++
-				maxDim, _ = strconv.Atoi(args[i])
+			if i+1 >= len(args) {
+				errln("error: --max needs WxH, for example 1920x1080")
+				return 1
 			}
+			i++
+			w, h, ok := parseMaxSize(args[i])
+			if !ok {
+				errln("error: --max must be WxH (1920x1080, 1280x720, 768x576, 720x480) or one edge in pixels")
+				return 1
+			}
+			maxW, maxH = w, h
 		case "--ffmpeg":
 			if i+1 < len(args) {
 				i++
@@ -489,7 +496,7 @@ func packCommand(args []string) int {
 			clearCache = true
 		}
 	}
-	if maxDim < 16 {
+	if maxW < 16 || maxH < 16 {
 		errln("error: --max too small")
 		return 1
 	}
@@ -520,8 +527,8 @@ func packCommand(args []string) int {
 	Stderr = io.MultiWriter(origErr, logFile)
 	defer func() { Stdout, Stderr = origOut, origErr }()
 
-	logln("packing", gameDir, "->", outRpk, " (max edge", maxDim, "px, ascii-text="+strconv.FormatBool(asciiText)+", ffmpeg:", ff.Path+")")
-	rc := Pack(gameDir, outRpk, ff, maxDim, asciiText, useCache, clearCache)
+	logln("packing", gameDir, "->", outRpk, " (max", strconv.Itoa(maxW)+"x"+strconv.Itoa(maxH), "ascii-text="+strconv.FormatBool(asciiText)+", ffmpeg:", ff.Path+")")
+	rc := Pack(gameDir, outRpk, ff, maxW, maxH, asciiText, useCache, clearCache)
 	logln("PACK_DONE rc=" + strconv.Itoa(rc))
 	return rc
 }

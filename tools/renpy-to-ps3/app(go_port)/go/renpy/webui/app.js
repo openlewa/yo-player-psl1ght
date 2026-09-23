@@ -21,7 +21,7 @@
   var packRow = $("pack-row");
   var astRow = $("ast-row");
   var astLabel = $("ast-label");
-  var maxEdge = $("max-edge");
+  var maxSize = $("max-size");
   var asciiText = $("ascii-text");
   var noCache = $("no-cache");
   var clearCache = $("clear-cache");
@@ -147,12 +147,7 @@
     var args = [task.verb, input];
     if (task.hasOutput && output) args.push(output);
     if (task.isPack) {
-      var n = parseInt(maxEdge.value, 10);
-      if (!isFinite(n) || n < 16) {
-        status.innerHTML = "max image size must be a number (16 or more)";
-        return;
-      }
-      args.push("--max", String(n));
+      args.push("--max", maxSize.value);
       if (asciiText.checked) args.push("--ascii-text");
       if (noCache.checked) args.push("--no-cache");
       if (clearCache.checked) args.push("--clear-cache");

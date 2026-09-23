@@ -105,8 +105,9 @@ func uniformScale(factor float64, even bool) string {
 	return "scale=trunc(iw*" + f + "):trunc(ih*" + f + ")"
 }
 
-// imageArgs writes exactly one still. Animated GIFs otherwise hit ffmpeg's
-// image2 error: "Cannot write more than one file with the same name".
+// imageArgs writes exactly one still. The PS3 player decodes one PNG or JPEG
+// into a texture and has no GIF or Motion JPEG player. Animated GIFs would
+// also hit ffmpeg's image2 error: "Cannot write more than one file with the same name".
 func imageArgs(inp, outp, vf string) []string {
 	args := []string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp}
 	if vf != "" {

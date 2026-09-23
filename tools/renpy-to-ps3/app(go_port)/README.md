@@ -78,10 +78,14 @@ list <rpa-file>
 extract <rpa-file> <output>
 info <game-dir>
 compile <rpyc|game-dir> [out.rbc]
-pack <game-dir> <out.rpk> [--max <px>] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache]
+pack <game-dir> <out.rpk> [--max WxH] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache]
 rpk <file>
 script <rpyc>
 ast <rpyc> [label]
 atldump <rpyc>
 ui [--port N]
 ```
+
+`--max` is the screen the pictures must fit inside. The page offers `1920x1080` (default, PS3/PS4 Full-HD), `1280x720` (PS3 HD-Ready), `768x576` (PS2 SD PAL) and `720x480` (PS2 SD NTSC). A single number, such as `--max 1280`, still means that many pixels on both edges.
+
+Animated GIF files, including a spinner such as `ajax-loader.gif`, are stored as one PNG frame. The PS3 player decodes a still PNG or JPEG into one texture. It does not play GIF, and Motion JPEG would not animate either: the JPEG decoder reads a single picture, and the player has no movie path for image assets.

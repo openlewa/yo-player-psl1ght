@@ -232,7 +232,7 @@ func TestPackTinyGame(t *testing.T) {
 	}
 	writeRpyc(t, filepath.Join(game, "script.rpyc"), "Eileen", "Hello")
 	outRpk := filepath.Join(dir, "out.rpk")
-	rc := Pack(game, outRpk, ff, 1920, false, false, false)
+	rc := Pack(game, outRpk, ff, 1920, 1080, false, false, false)
 	if rc != 0 {
 		t.Fatalf("pack rc=%d", rc)
 	}
@@ -319,6 +319,38 @@ func TestScanClassesNullMemoDoesNotShift(t *testing.T) {
 	}
 	if _, ok := classes["ast.ast"]; ok {
 		t.Fatal("null memo replayed ast as a second string")
+	}
+}
+
+func TestParseMaxSize(t *testing.T) {
+	cases := []struct {
+		in   string
+		w, h int
+		ok   bool
+	}{
+		{"1920x1080", 1920, 1080, true},
+		{"1280×720", 1280, 720, true},
+		{"768 x 576", 768, 576, true},
+		{"720X480", 720, 480, true},
+		{"1920", 1920, 1920, true},
+		{"8", 0, 0, false},
+		{"nope", 0, 0, false},
+		{"1920x", 0, 0, false},
+	}
+	for _, c := range cases {
+		w, h, ok := parseMaxSize(c.in)
+		if ok != c.ok || w != c.w || h != c.h {
+			t.Fatalf("%q -> %d %d %v, want %d %d %v", c.in, w, h, ok, c.w, c.h, c.ok)
+		}
+	}
+	if fitFactor(1920, 1080, 720, 480) != 0.375 {
+		t.Fatal(fitFactor(1920, 1080, 720, 480))
+	}
+	if fitFactor(1920, 1080, 1920, 1080) != 1 {
+		t.Fatal(fitFactor(1920, 1080, 1920, 1080))
+	}
+	if fitFactor(1280, 720, 768, 576) != float64(768)/float64(1280) {
+		t.Fatal(fitFactor(1280, 720, 768, 576))
 	}
 }
 

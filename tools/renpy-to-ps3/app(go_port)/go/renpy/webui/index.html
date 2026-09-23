@@ -31,10 +31,14 @@
       </div>
 
       <div class="row" id="pack-row">
-        <label title="Images larger than this (longest edge, in pixels) are shrunk to fit">Max image size:</label>
+        <label title="Images are shrunk to fit inside this screen size. Animated GIFs become one still PNG. The PS3 player shows PNG and JPEG only, so Motion JPEG would not play.">Max image size:</label>
         <div class="pack-opts">
-          <input id="max-edge" type="text" value="1920" class="num" />
-          <span class="dim">px</span>
+          <select id="max-size">
+            <option value="1920x1080" selected>1920x1080 PS3/PS4 Full-HD</option>
+            <option value="1280x720">1280 × 720 PS3 HD-Ready</option>
+            <option value="768x576">768 x 576 PS2 SD PAL</option>
+            <option value="720x480">720 x 480 PS2 SD NTSC</option>
+          </select>
           <label class="check">
             <input id="ascii-text" type="checkbox" /> Use plain quotes/dots
           </label>

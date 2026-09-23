@@ -57,6 +57,11 @@ select {
   width: 280px;
 }
 
+#max-size {
+  width: auto;
+  min-width: 260px;
+}
+
 .field {
   position: relative;
   flex: 1 1 auto;

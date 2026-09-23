@@ -37,7 +37,7 @@ func putAsset(m map[string][]byte, name string, data []byte) {
 	m[name] = data
 }
 
-func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, clearCache bool) int {
+func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCache, clearCache bool) int {
 	staging, err := os.MkdirTemp("", "rpk_stage_")
 	if err != nil {
 		errln("error:", err)
@@ -81,23 +81,16 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 	uniform := nativeW > 0 && nativeH > 0
 	factor := 1.0
 	if uniform {
-		fw := float64(maxDim) / float64(nativeW)
-		fh := float64(maxDim) / float64(nativeH)
-		factor = fw
-		if fh < fw {
-			factor = fh
-		}
-		if factor > 1 {
-			factor = 1
-		}
+		factor = fitFactor(nativeW, nativeH, maxW, maxH)
 	}
 	if uniform && factor < 1.0 {
 		gui += "asset_scale=" + strconv.FormatFloat(factor, 'f', 6, 64) + "\n"
 	}
+	maxLabel := strconv.Itoa(maxW) + "x" + strconv.Itoa(maxH)
 	if uniform {
-		logln("scaling: uniform x" + strconv.FormatFloat(factor, 'f', 3, 64) + " (native " + strconv.Itoa(nativeW) + "x" + strconv.Itoa(nativeH) + ", max edge " + strconv.Itoa(maxDim) + ")")
+		logln("scaling: uniform x" + strconv.FormatFloat(factor, 'f', 3, 64) + " (native " + strconv.Itoa(nativeW) + "x" + strconv.Itoa(nativeH) + ", max " + maxLabel + ")")
 	} else {
-		logln("scaling: per-image max-edge cap " + strconv.Itoa(maxDim) + " (native resolution unknown)")
+		logln("scaling: per-image cap " + maxLabel + " (native resolution unknown)")
 	}
 
 	assets := map[string][]byte{}
@@ -159,14 +152,14 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 	}
 
 	var (
-		packed                               []RpkEntry
-		failed                               []string
-		images, audio, video, fonts, skipped int
-		cacheHits, encoded, passed           int
-		srcBytes, dstBytes                   int64
-		done                                 int32
-		jobID                                int32
-		mu                                   sync.Mutex
+		packed                                     []RpkEntry
+		failed                                     []string
+		images, audio, video, fonts, skipped, gifs int
+		cacheHits, encoded, passed                 int
+		srcBytes, dstBytes                         int64
+		done                                       int32
+		jobID                                      int32
+		mu                                         sync.Mutex
 	)
 	total := len(work)
 	workers := runtime.NumCPU()
@@ -199,7 +192,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 							outExt = ".jpg"
 						}
 						var errStr string
-						ok := convertAsset(ff, kv.data, ext, outExt, staging, int(id), uniform, factor, maxDim, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
+						ok := convertAsset(ff, kv.data, ext, outExt, staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
 						if ok {
 							outName = changeExt(kv.name, outExt)
 						} else {
@@ -208,7 +201,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 					} else if audioExt[ext] {
 						kind = 1
 						var errStr string
-						ok := convertAsset(ff, kv.data, ext, ".ogg", staging, int(id), uniform, factor, maxDim, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
+						ok := convertAsset(ff, kv.data, ext, ".ogg", staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
 						if ok {
 							outName = changeExt(kv.name, ".ogg")
 						} else {
@@ -217,7 +210,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 					} else if videoExt[ext] {
 						kind = 2
 						var errStr string
-						ok := convertAsset(ff, kv.data, ext, ".mp4", staging, int(id), uniform, factor, maxDim, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
+						ok := convertAsset(ff, kv.data, ext, ".mp4", staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
 						if ok {
 							outName = changeExt(kv.name, ".mp4")
 						} else {
@@ -239,6 +232,9 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 					switch kind {
 					case 0:
 						images++
+						if ext == ".gif" {
+							gifs++
+						}
 					case 1:
 						audio++
 					case 2:
@@ -314,6 +310,9 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxDim int, asciiText, useCache, c
 	logln("")
 	logln("== pack summary ==")
 	logln("images:", images, " audio:", audio, " video:", video, " fonts:", fonts, " skipped:", skipped)
+	if gifs > 0 {
+		logln("animated gif:", gifs, "stored as one PNG frame (the PS3 player shows a still PNG or JPEG, not a GIF or Motion JPEG)")
+	}
 	if useCache {
 		logln("asset cache:", cacheHits, "reused,", passed, "passthrough,", encoded, "encoded (dir:", cacheDir+")")
 	} else {
@@ -364,14 +363,14 @@ func printNotes(prog *IrProgram) {
 	}
 }
 
-func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int, uniform bool, factor float64, maxDim int, cacheDir string, useCache bool, ffFp string, outBytes *[]byte, errStr *string, via *int) bool {
+func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int, uniform bool, factor float64, maxW, maxH int, cacheDir string, useCache bool, ffFp string, outBytes *[]byte, errStr *string, via *int) bool {
 	*outBytes = nil
 	*errStr = ""
 	*via = 0
 
 	var cachePath string
 	if useCache {
-		key := cacheKey(src, inExt, outExt, uniform, factor, maxDim, ffFp)
+		key := cacheKey(src, inExt, outExt, uniform, factor, maxW, maxH, ffFp)
 		cachePath = filepath.Join(cacheDir, key+outExt)
 		if b, err := os.ReadFile(cachePath); err == nil {
 			*outBytes = b
@@ -379,7 +378,7 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 			return true
 		}
 	}
-	if useCache && canPassThrough(src, inExt, outExt, uniform, factor, maxDim) {
+	if useCache && canPassThrough(src, inExt, outExt, uniform, factor, maxW, maxH) {
 		*outBytes = src
 		*via = 2
 		storeCache(cachePath, *outBytes)
@@ -400,12 +399,12 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 		if uniform {
 			ok, e = ff.VideoScaled(inp, outp, factor)
 		} else {
-			ok, e = ff.Video(inp, outp, maxDim, maxDim)
+			ok, e = ff.Video(inp, outp, maxW, maxH)
 		}
 	} else if uniform {
 		ok, e = ff.ImageScaled(inp, outp, factor)
 	} else {
-		ok, e = ff.Image(inp, outp, maxDim, maxDim)
+		ok, e = ff.Image(inp, outp, maxW, maxH)
 	}
 	if ok {
 		if b, err := os.ReadFile(outp); err == nil {
@@ -429,13 +428,13 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 	return false
 }
 
-func cacheKey(src []byte, inExt, outExt string, uniform bool, factor float64, maxDim int, ffFp string) string {
+func cacheKey(src []byte, inExt, outExt string, uniform bool, factor float64, maxW, maxH int, ffFp string) string {
 	u := "P"
 	if uniform {
 		u = "U"
 	}
 	hdr := "v" + strconv.Itoa(cacheVersion) + "|" + ffFp + "|" + strings.ToLower(inExt) + "|" + outExt + "|" + u + "|" +
-		strconv.FormatFloat(factor, 'f', 6, 64) + "|" + strconv.Itoa(maxDim) + "|"
+		strconv.FormatFloat(factor, 'f', 6, 64) + "|" + strconv.Itoa(maxW) + "x" + strconv.Itoa(maxH) + "|"
 	h := sha256.New()
 	h.Write([]byte(hdr))
 	h.Write(src)
@@ -460,7 +459,7 @@ func storeCache(path string, data []byte) {
 	_ = os.Rename(tmp, path)
 }
 
-func canPassThrough(src []byte, inExt, outExt string, uniform bool, factor float64, maxDim int) bool {
+func canPassThrough(src []byte, inExt, outExt string, uniform bool, factor float64, maxW, maxH int) bool {
 	inExt = strings.ToLower(inExt)
 	var w, h int
 	ok := false
@@ -477,7 +476,48 @@ func canPassThrough(src []byte, inExt, outExt string, uniform bool, factor float
 	if uniform {
 		return factor >= 1.0
 	}
-	return w > 0 && h > 0 && w <= maxDim && h <= maxDim
+	return w > 0 && h > 0 && w <= maxW && h <= maxH
+}
+
+// parseMaxSize reads a screen cap. "1920x1080", "1280×720" and "768 x 576"
+// are width and height. A single number is that many pixels on both edges.
+func parseMaxSize(s string) (w, h int, ok bool) {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "×", "x")
+	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ToLower(s)
+	if i := strings.IndexByte(s, 'x'); i > 0 {
+		var errW, errH error
+		w, errW = strconv.Atoi(s[:i])
+		h, errH = strconv.Atoi(s[i+1:])
+		if errW != nil || errH != nil || w < 16 || h < 16 {
+			return 0, 0, false
+		}
+		return w, h, true
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 16 {
+		return 0, 0, false
+	}
+	return n, n, true
+}
+
+// fitFactor is how far a native WxH game must shrink to sit inside maxW x maxH.
+// 1 means it already fits. The same factor is applied to every asset.
+func fitFactor(nativeW, nativeH, maxW, maxH int) float64 {
+	if nativeW <= 0 || nativeH <= 0 || maxW <= 0 || maxH <= 0 {
+		return 1
+	}
+	fw := float64(maxW) / float64(nativeW)
+	fh := float64(maxH) / float64(nativeH)
+	factor := fw
+	if fh < fw {
+		factor = fh
+	}
+	if factor > 1 {
+		return 1
+	}
+	return factor
 }
 
 func pngPlain(b []byte, w, h *int) bool {
