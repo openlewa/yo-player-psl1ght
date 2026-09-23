@@ -1,6 +1,6 @@
 # Ren'Py to PS3 — Go port (alternative)
 
-Alternative to the original C# / WPF program in `tools/renpy-to-ps3`. That program is unchanged and still builds with Visual Studio or MSBuild. This folder is a separate Go port for when you do not want those tools, including on Windows 7.
+Alternative to the original C# / WPF program in `tools/renpy-to-ps3`. This folder is a separate Go port for when you do not want those tools on Windows.
 
 It does not call the C# program. The UI is a local page at http://127.0.0.1:8765/ (`renpy-to-ps3 ui`), with the same tasks and log pane on Windows 7 and Windows 11.
 
@@ -8,17 +8,15 @@ Licensed under the Apache License, Version 2.0, January 2004. See `LICENSE`. Cop
 
 ## Why this does not call the C# app
 
-`Program.Run` is an internal method. The project starts `RenpyToPs3.App`, which always opens `MainWindow.xaml`. There is no command-line entry point, and this repo does not ship a built `renpy-to-ps3.exe`.
+This app is a separate Go program, build with the Go toolchain only.
 
-This app is a separate Go program. Build it with the Go toolchain only.
+There is no command-line entry point in the C# App, and this repo does not ship a built `renpy-to-ps3.exe`.
 
 ## What you need
 
 - [Go 1.20.14](https://go.dev/dl/go1.20.14.windows-amd64.msi) on Windows 7. Windows 11 can use 1.20.14 or any newer Go.
 - A browser (Windows 7: Chrome 109 or Firefox 115 ESR).
 - ffmpeg. `tools/renpy-to-ps3/ffmpeg.exe` is already in the repo; the start script copies it next to the Go binary.
-
-No Node, Rust, WebView2, or Visual Studio.
 
 ## Start on Windows 7 and Windows 11
 
