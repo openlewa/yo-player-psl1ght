@@ -385,6 +385,46 @@ func TestGifToPng(t *testing.T) {
 	}
 }
 
+func TestGifPackKeepsScriptName(t *testing.T) {
+	ff, err := NewFfmpeg("")
+	if err != nil {
+		t.Skip("ffmpeg:", err)
+	}
+	dir := t.TempDir()
+	game := filepath.Join(dir, "game")
+	if err := os.MkdirAll(game, 0755); err != nil {
+		t.Fatal(err)
+	}
+	gifPath := filepath.Join(game, "ajax-loader.gif")
+	if out, err := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=blue:s=8x8", "-frames:v", "4", gifPath).CombinedOutput(); err != nil {
+		t.Fatalf("make gif: %v\n%s", err, out)
+	}
+	outRpk := filepath.Join(dir, "out.rpk")
+	if rc := Pack(game, outRpk, ff, 720, 480, false, false, false); rc != 0 {
+		t.Fatalf("pack rc=%d", rc)
+	}
+	toc, err := ReadRpkToc(outRpk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range toc {
+		names = append(names, e.Name)
+		if e.Name == "assets/ajax-loader.png" {
+			t.Fatal("gif was renamed, the player looks up ajax-loader.gif")
+		}
+	}
+	found := false
+	for _, n := range names {
+		if n == "assets/ajax-loader.gif" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing assets/ajax-loader.gif in %v", names)
+	}
+}
+
 func TestScanClassesTruncated(t *testing.T) {
 	ScanClasses([]byte{0x80})
 	ScanClasses([]byte{0x8c, 50})

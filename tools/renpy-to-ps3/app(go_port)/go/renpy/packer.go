@@ -187,6 +187,9 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 					}()
 					if imageExt[ext] {
 						kind = 0
+						// JPEG stays JPEG. Everything else is PNG bytes. The entry keeps
+						// the script's filename: the player looks up that name and sniffs
+						// PNG/JPEG from the bytes, so ajax-loader.gif is still found.
 						outExt := ".png"
 						if ext == ".jpg" || ext == ".jpeg" {
 							outExt = ".jpg"
@@ -194,7 +197,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 						var errStr string
 						ok := convertAsset(ff, kv.data, ext, outExt, staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
 						if ok {
-							outName = changeExt(kv.name, outExt)
+							outName = kv.name
 						} else {
 							fail = kv.name + " : " + errStr
 						}
