@@ -93,7 +93,21 @@ func (ff *Ffmpeg) Run(args []string, timeout time.Duration) (ok bool, errText st
 }
 
 func scaleFilter(maxW, maxH int) string {
-	return "scale='min(iw," + strconv.Itoa(maxW) + ")':'min(ih," + strconv.Itoa(maxH) + ")':force_original_aspect_ratio=decrease"
+	return fitScale(maxW, maxH, false)
+}
+
+// videoScaleFilter fits the frame, then rounds both sides down to even pixels.
+// libx264 with yuv420p rejects sizes such as 1920x1079.
+func videoScaleFilter(maxW, maxH int) string {
+	return fitScale(maxW, maxH, true)
+}
+
+func fitScale(maxW, maxH int, even bool) string {
+	f := "scale='min(iw," + strconv.Itoa(maxW) + ")':'min(ih," + strconv.Itoa(maxH) + ")':force_original_aspect_ratio=decrease"
+	if even {
+		f += ",scale=trunc(iw/2)*2:trunc(ih/2)*2"
+	}
+	return f
 }
 
 func uniformScale(factor float64, even bool) string {
@@ -157,7 +171,7 @@ func (ff *Ffmpeg) Audio(inp, outp string) (bool, string) {
 func (ff *Ffmpeg) Video(inp, outp string, maxW, maxH int) (bool, string) {
 	return ff.Run([]string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp,
 		"-c:v", "libx264", "-profile:v", "main", "-level", "4.0", "-pix_fmt", "yuv420p",
-		"-preset", "veryfast", "-crf", "23", "-vf", scaleFilter(maxW, maxH),
+		"-preset", "veryfast", "-crf", "23", "-vf", videoScaleFilter(maxW, maxH),
 		"-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", outp}, 30*time.Minute)
 }
 

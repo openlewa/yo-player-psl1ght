@@ -33,6 +33,8 @@
   var picker = $("picker");
   var pickerPath = $("picker-path");
   var pickerList = $("picker-list");
+  var pickerLoading = $("picker-loading");
+  var fsToken = 0;
   var pickerUse = $("picker-use");
   var pickerName = $("picker-name");
   var pickerMode = "input";
@@ -88,11 +90,25 @@
     picker.className = "picker hidden";
   }
 
+  function showPickerLoading() {
+    pickerLoading.className = "picker-loading";
+    pickerList.className = "picker-list hidden";
+    pickerList.innerHTML = "";
+  }
+
+  function hidePickerLoading() {
+    pickerLoading.className = "picker-loading hidden";
+    pickerList.className = "picker-list";
+  }
+
   function loadFs(path) {
+    var token = ++fsToken;
+    showPickerLoading();
     var req = new XMLHttpRequest();
     req.open("GET", "/api/fs?path=" + encodeURIComponent(path || ""), true);
     req.onreadystatechange = function () {
-      if (req.readyState !== 4) return;
+      if (req.readyState !== 4 || token !== fsToken) return;
+      hidePickerLoading();
       var data;
       try { data = JSON.parse(req.responseText); } catch (e) { return; }
       pickerCurrent = data.path || "";
@@ -122,6 +138,14 @@
           pickerList.appendChild(row);
         })(entries[i]);
       }
+    };
+    req.onerror = function () {
+      if (token !== fsToken) return;
+      hidePickerLoading();
+      pickerList.innerHTML = "";
+      var err = document.createElement("div");
+      err.appendChild(document.createTextNode("Could not read this folder"));
+      pickerList.appendChild(err);
     };
     req.send(null);
   }

@@ -485,6 +485,29 @@ func readRpkEntry(t *testing.T, path, name string) []byte {
 	return buf
 }
 
+func TestVideoOddHeight(t *testing.T) {
+	ff, err := NewFfmpeg("")
+	if err != nil {
+		t.Skip("ffmpeg:", err)
+	}
+	if !strings.Contains(videoScaleFilter(1920, 1080), "trunc(iw/2)*2") {
+		t.Fatal(videoScaleFilter(1920, 1080))
+	}
+	dir := t.TempDir()
+	in := filepath.Join(dir, "attack.webm")
+	out := filepath.Join(dir, "attack.mp4")
+	if log, err := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=red:s=16x15:d=0.2", "-frames:v", "3", in).CombinedOutput(); err != nil {
+		t.Fatalf("make webm: %v\n%s", err, log)
+	}
+	ok, errText := ff.Video(in, out, 1920, 1080)
+	if !ok {
+		t.Fatal(errText)
+	}
+	if st, err := os.Stat(out); err != nil || st.Size() == 0 {
+		t.Fatalf("mp4: %v", err)
+	}
+}
+
 func TestGifArgsKeepFrames(t *testing.T) {
 	got := strings.Join(gifArgs("a.gif", "b.gif", "scale=8:8"), " ")
 	if strings.Contains(got, "-frames:v") || !strings.Contains(got, "-loop 0") {

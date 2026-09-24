@@ -199,6 +199,38 @@ button:disabled {
   margin-left: 8px;
 }
 
+.picker-loading {
+  height: 280px;
+  border: 1px solid #3f3f3f;
+  background: #1e1e1e;
+}
+
+.picker-loading-label {
+  padding-top: 110px;
+  text-align: center;
+  color: #cccccc;
+}
+
+.picker-loading-track {
+  margin: 14px 48px 0;
+  height: 10px;
+  background: #2d2d2d;
+  border: 1px solid #3f3f3f;
+  overflow: hidden;
+}
+
+.picker-loading-bar {
+  height: 100%;
+  width: 35%;
+  background: #4a90c8;
+  animation: picker-load 1s linear infinite;
+}
+
+@keyframes picker-load {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+
 .picker-list {
   height: 280px;
   overflow: auto;
