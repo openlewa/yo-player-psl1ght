@@ -25,6 +25,8 @@
   var asciiText = $("ascii-text");
   var noCache = $("no-cache");
   var clearCache = $("clear-cache");
+  var betaGif = $("beta-gif");
+  var settingsBox = $("settings-box");
   var logView = $("log");
   var status = $("status");
   var runBtn = $("run");
@@ -151,6 +153,7 @@
       if (asciiText.checked) args.push("--ascii-text");
       if (noCache.checked) args.push("--no-cache");
       if (clearCache.checked) args.push("--clear-cache");
+      if (betaGif.checked) args.push("--beta", "gif");
     }
     if (task.isAst) {
       var label = astLabel.value.replace(/^\s+|\s+$/g, "");
@@ -226,7 +229,27 @@
     if (!path) return;
     choosePath(path);
   };
+  function loadSettings() {
+    var raw = "";
+    try { raw = localStorage.getItem("renpy-to-ps3-settings") || ""; } catch (e) { raw = ""; }
+    var data = {};
+    if (raw) {
+      try { data = JSON.parse(raw); } catch (e2) { data = {}; }
+    }
+    betaGif.checked = !!data.animatedGif;
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem("renpy-to-ps3-settings", JSON.stringify({ animatedGif: !!betaGif.checked }));
+    } catch (e) {}
+  }
+
   runBtn.onclick = run;
   $("clear").onclick = function () { logView.value = ""; };
+  $("settings").onclick = function () { settingsBox.className = "picker"; };
+  $("settings-close").onclick = function () { saveSettings(); settingsBox.className = "picker hidden"; };
+  betaGif.onclick = saveSettings;
+  loadSettings();
   onTaskChosen();
 })();

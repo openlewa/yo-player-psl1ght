@@ -232,7 +232,7 @@ func TestPackTinyGame(t *testing.T) {
 	}
 	writeRpyc(t, filepath.Join(game, "script.rpyc"), "Eileen", "Hello")
 	outRpk := filepath.Join(dir, "out.rpk")
-	rc := Pack(game, outRpk, ff, 1920, 1080, false, false, false)
+	rc := Pack(game, outRpk, ff, 1920, 1080, false, false, false, false)
 	if rc != 0 {
 		t.Fatalf("pack rc=%d", rc)
 	}
@@ -400,7 +400,7 @@ func TestGifPackKeepsScriptName(t *testing.T) {
 		t.Fatalf("make gif: %v\n%s", err, out)
 	}
 	outRpk := filepath.Join(dir, "out.rpk")
-	if rc := Pack(game, outRpk, ff, 720, 480, false, false, false); rc != 0 {
+	if rc := Pack(game, outRpk, ff, 720, 480, false, false, false, false); rc != 0 {
 		t.Fatalf("pack rc=%d", rc)
 	}
 	toc, err := ReadRpkToc(outRpk)
@@ -422,6 +422,73 @@ func TestGifPackKeepsScriptName(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("missing assets/ajax-loader.gif in %v", names)
+	}
+	raw := readRpkEntry(t, outRpk, "assets/ajax-loader.gif")
+	if len(raw) < 8 || raw[0] != 0x89 || string(raw[1:4]) != "PNG" {
+		t.Fatal("default pack should store one PNG frame under the .gif name")
+	}
+}
+
+func TestGifBetaKeepsAnimation(t *testing.T) {
+	ff, err := NewFfmpeg("")
+	if err != nil {
+		t.Skip("ffmpeg:", err)
+	}
+	dir := t.TempDir()
+	game := filepath.Join(dir, "game")
+	if err := os.MkdirAll(game, 0755); err != nil {
+		t.Fatal(err)
+	}
+	gifPath := filepath.Join(game, "ajax-loader.gif")
+	if out, err := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=blue:s=8x8", "-frames:v", "4", gifPath).CombinedOutput(); err != nil {
+		t.Fatalf("make gif: %v\n%s", err, out)
+	}
+	outRpk := filepath.Join(dir, "out.rpk")
+	if rc := Pack(game, outRpk, ff, 720, 480, false, false, false, true); rc != 0 {
+		t.Fatalf("pack rc=%d", rc)
+	}
+	raw := readRpkEntry(t, outRpk, "assets/ajax-loader.gif")
+	src, err := os.ReadFile(gifPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string(src) {
+		t.Fatal("beta gif should pass a small animation through unchanged")
+	}
+}
+
+func readRpkEntry(t *testing.T, path, name string) []byte {
+	t.Helper()
+	toc, err := ReadRpkToc(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ent *RpkTocEntry
+	for i := range toc {
+		if toc[i].Name == name {
+			ent = &toc[i]
+			break
+		}
+	}
+	if ent == nil {
+		t.Fatalf("missing %s", name)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	buf := make([]byte, ent.Length)
+	if _, err := f.ReadAt(buf, ent.Offset); err != nil {
+		t.Fatal(err)
+	}
+	return buf
+}
+
+func TestGifArgsKeepFrames(t *testing.T) {
+	got := strings.Join(gifArgs("a.gif", "b.gif", "scale=8:8"), " ")
+	if strings.Contains(got, "-frames:v") || !strings.Contains(got, "-loop 0") {
+		t.Fatal(got)
 	}
 }
 

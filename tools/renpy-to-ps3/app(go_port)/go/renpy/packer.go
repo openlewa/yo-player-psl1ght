@@ -37,7 +37,7 @@ func putAsset(m map[string][]byte, name string, data []byte) {
 	m[name] = data
 }
 
-func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCache, clearCache bool) int {
+func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCache, clearCache, animatedGif bool) int {
 	staging, err := os.MkdirTemp("", "rpk_stage_")
 	if err != nil {
 		errln("error:", err)
@@ -187,12 +187,14 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 					}()
 					if imageExt[ext] {
 						kind = 0
-						// JPEG stays JPEG. Everything else is PNG bytes. The entry keeps
-						// the script's filename: the player looks up that name and sniffs
-						// PNG/JPEG from the bytes, so ajax-loader.gif is still found.
+						// JPEG stays JPEG. Other images are PNG bytes under the script's
+						// filename, so ajax-loader.gif is still found. The Animated GIF
+						// beta keeps a real GIF instead of one PNG frame.
 						outExt := ".png"
 						if ext == ".jpg" || ext == ".jpeg" {
 							outExt = ".jpg"
+						} else if ext == ".gif" && animatedGif {
+							outExt = ".gif"
 						}
 						var errStr string
 						ok := convertAsset(ff, kv.data, ext, outExt, staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
@@ -313,7 +315,9 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 	logln("")
 	logln("== pack summary ==")
 	logln("images:", images, " audio:", audio, " video:", video, " fonts:", fonts, " skipped:", skipped)
-	if gifs > 0 {
+	if gifs > 0 && animatedGif {
+		logln("animated gif:", gifs, "kept as GIF (beta). The player loops them only with the animated-GIF decoder.")
+	} else if gifs > 0 {
 		logln("animated gif:", gifs, "stored as one PNG frame (the PS3 player shows a still PNG or JPEG, not a GIF or Motion JPEG)")
 	}
 	if useCache {
@@ -398,6 +402,12 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 	var e string
 	if outExt == ".ogg" {
 		ok, e = ff.Audio(inp, outp)
+	} else if outExt == ".gif" {
+		if uniform {
+			ok, e = ff.GifScaled(inp, outp, factor)
+		} else {
+			ok, e = ff.Gif(inp, outp, maxW, maxH)
+		}
 	} else if outExt == ".mp4" {
 		if uniform {
 			ok, e = ff.VideoScaled(inp, outp, factor)
@@ -466,7 +476,12 @@ func canPassThrough(src []byte, inExt, outExt string, uniform bool, factor float
 	inExt = strings.ToLower(inExt)
 	var w, h int
 	ok := false
-	if inExt == ".png" && outExt == ".png" {
+	if inExt == ".gif" && outExt == ".gif" {
+		if uniform {
+			return factor >= 1.0
+		}
+		w, h, ok = gifLogicalSize(src)
+	} else if inExt == ".png" && outExt == ".png" {
 		ok = pngPlain(src, &w, &h)
 	} else if (inExt == ".jpg" || inExt == ".jpeg") && outExt == ".jpg" {
 		ok = jpgBaseline(src, &w, &h)
@@ -521,6 +536,15 @@ func fitFactor(nativeW, nativeH, maxW, maxH int) float64 {
 		return 1
 	}
 	return factor
+}
+
+func gifLogicalSize(b []byte) (w, h int, ok bool) {
+	if len(b) < 10 || string(b[:3]) != "GIF" {
+		return 0, 0, false
+	}
+	w = int(b[6]) | int(b[7])<<8
+	h = int(b[8]) | int(b[9])<<8
+	return w, h, w > 0 && h > 0
 }
 
 func pngPlain(b []byte, w, h *int) bool {

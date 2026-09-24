@@ -31,7 +31,7 @@
       </div>
 
       <div class="row" id="pack-row">
-        <label title="Images are shrunk to fit inside this screen size. Animated GIFs become one still PNG. The PS3 player shows PNG and JPEG only, so Motion JPEG would not play.">Max image size:</label>
+        <label title="Images are shrunk to fit inside this screen size. Animated GIFs become one still PNG unless Animated GIF is turned on in Settings.">Max image size:</label>
         <div class="pack-opts">
           <select id="max-size">
             <option value="1920x1080" selected>1920x1080 PS3/PS4 Full-HD</option>
@@ -60,8 +60,22 @@
 
       <div class="row footer">
         <button id="run" type="button">Run</button>
+        <button id="settings" type="button">Settings</button>
         <button id="clear" type="button">Clear Log</button>
         <span id="status" class="dim"></span>
+      </div>
+    </div>
+
+    <div id="settings-box" class="picker hidden">
+      <div class="picker-box settings-box">
+        <div class="picker-help">Beta features stay off until you turn them on. The choice is remembered in this browser.</div>
+        <label class="check settings-item">
+          <input id="beta-gif" type="checkbox" /> Animated GIF
+        </label>
+        <p class="settings-note">Keep every frame of a GIF, under the same file name. The PS3 player loops those frames only when it includes the animated-GIF decoder. With this off, each GIF is stored as one still PNG so the current player can show it.</p>
+        <div class="picker-actions">
+          <button id="settings-close" type="button">Close</button>
+        </div>
       </div>
     </div>
 

@@ -92,7 +92,7 @@ func Run(args []string) (code int) {
 		return compileCommand(args[1], full, outRbc)
 	case "pack":
 		if len(args) < 3 {
-			errln("usage: renpy-to-ps3 pack <game-dir> <out.rpk> [--max WxH] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache]")
+			errln("usage: renpy-to-ps3 pack <game-dir> <out.rpk> [--max WxH] [--ascii-text] [--ffmpeg <path>] [--no-cache] [--clear-cache] [--beta gif]")
 			return 1
 		}
 		return packCommand(args)
@@ -120,6 +120,7 @@ func printUsage() {
 	logln("  info <game-dir>                         Show construct compatibility")
 	logln("  compile <rpyc|game-dir> [out.rbc]       Compile to IR / bytecode")
 	logln("  pack <game-dir> <out.rpk> [--max WxH]   Convert + compile + bundle")
+	logln("       [--beta gif]                       Beta: keep animated GIF frames")
 	logln("       [--no-cache] [--clear-cache]       Asset cache: bypass / wipe-then-rebuild")
 	logln("  rpk <file>                              Inspect an .rpk bundle")
 	logln("  ui [--port N]                           Local web UI (Windows 7 / any browser)")
@@ -468,7 +469,7 @@ func packCommand(args []string) int {
 	var err error
 	maxW, maxH := 1920, 1080
 	ffmpegPath := ""
-	asciiText, useCache, clearCache := false, true, false
+	asciiText, useCache, clearCache, animatedGif := false, true, false, false
 	for i := 3; i < len(args); i++ {
 		switch args[i] {
 		case "--max":
@@ -487,6 +488,19 @@ func packCommand(args []string) int {
 			if i+1 < len(args) {
 				i++
 				ffmpegPath = args[i]
+			}
+		case "--beta":
+			if i+1 >= len(args) {
+				errln("error: --beta needs a name, for example gif")
+				return 1
+			}
+			i++
+			switch strings.ToLower(args[i]) {
+			case "gif":
+				animatedGif = true
+			default:
+				errln("error: unknown beta feature:", args[i])
+				return 1
 			}
 		case "--ascii-text":
 			asciiText = true
@@ -527,8 +541,8 @@ func packCommand(args []string) int {
 	Stderr = io.MultiWriter(origErr, logFile)
 	defer func() { Stdout, Stderr = origOut, origErr }()
 
-	logln("packing", gameDir, "->", outRpk, " (max", strconv.Itoa(maxW)+"x"+strconv.Itoa(maxH), "ascii-text="+strconv.FormatBool(asciiText)+", ffmpeg:", ff.Path+")")
-	rc := Pack(gameDir, outRpk, ff, maxW, maxH, asciiText, useCache, clearCache)
+	logln("packing", gameDir, "->", outRpk, " (max", strconv.Itoa(maxW)+"x"+strconv.Itoa(maxH), "ascii-text="+strconv.FormatBool(asciiText)+", animated-gif="+strconv.FormatBool(animatedGif)+", ffmpeg:", ff.Path+")")
+	rc := Pack(gameDir, outRpk, ff, maxW, maxH, asciiText, useCache, clearCache, animatedGif)
 	logln("PACK_DONE rc=" + strconv.Itoa(rc))
 	return rc
 }
