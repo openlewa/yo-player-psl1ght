@@ -23,19 +23,19 @@ There is no command-line entry point in the C# App, and this repo does not ship 
 Double-click:
 
 ```bat
-tools\renpy-to-ps3\app(go_port)\start-windows7.bat
+tools\renpy-to-ps3\app(go_port)\start-app-windows.bat
 ```
 
 Or:
 
 ```bat
 cd /d "path\to\yo-player-psl1ght\tools\renpy-to-ps3\app(go_port)"
-start-windows7.bat
+start-app-windows.bat
 ```
 
-The script builds `app(go_port)\go\renpy-to-ps3.exe`, copies `ffmpeg.exe` beside it, and opens the page. Close the console window to quit.
+The script opens cmd.exe, copies `ffmpeg.exe` beside the Webapp, and opens the page. Close the console window to quit.
 
-If Go is missing, the script downloads the Go 1.20.14 installer and starts it. Finish that installer, then run `start-windows7.bat` again. If the download fails, install Go from https://go.dev/dl/go1.20.14.windows-amd64.msi and run the script again.
+If Go is missing, the script downloads the Go 1.20.14 installer and starts it. Finish that installer, then run `start-app-windows.bat` again. If the download fails, install Go from https://go.dev/dl/go1.20.14.windows-amd64.msi and run the script again.
 
 Same thing by hand in **PowerShell** (including PowerShell 7):
 
@@ -88,4 +88,4 @@ ui [--port N]
 
 `--max` is the screen the pictures must fit inside. The page offers `1920x1080` (default, PS3/PS4 Full-HD), `1280x720` (PS3 HD-Ready), `768x576` (PS2 SD PAL) and `720x480` (PS2 SD NTSC). A single number, such as `--max 1280`, still means that many pixels on both edges.
 
-Settings, on the page, remembers beta features in the browser. Animated GIF is off by default: `ajax-loader.gif` is stored under that name as one PNG frame, which the current player can show. Turn the beta on, or pass `--beta gif`, to keep every frame. The PS3 player loops those frames only when it includes the animated-GIF decoder.
+Settings, on the page, remembers beta features in the browser. Animated GIF is off by default. Turn the beta on, or pass `--beta gif`, to keep every frame. The PS3 player loops those frames only when it includes the animated-GIF decoder.
