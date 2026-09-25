@@ -82,9 +82,15 @@
     <div id="picker" class="picker hidden">
       <div class="picker-box">
         <div class="picker-help">Open a folder, then click Select this folder. One click opens a folder.</div>
+        <div class="picker-places">
+          <button id="picker-home" type="button">Home</button>
+          <button id="picker-desktop" type="button">Desktop</button>
+          <button id="picker-drives" type="button" class="hidden">Drives</button>
+        </div>
         <div class="picker-path" id="picker-path"></div>
         <div id="picker-loading" class="picker-loading hidden">
           <div class="picker-loading-label">Loading</div>
+          <div class="picker-loading-note">This can take several minutes.</div>
           <div class="picker-loading-track"><div class="picker-loading-bar"></div></div>
         </div>
         <div class="picker-list" id="picker-list"></div>

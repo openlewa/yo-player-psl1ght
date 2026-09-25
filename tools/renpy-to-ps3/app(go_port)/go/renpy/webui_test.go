@@ -54,6 +54,27 @@ func TestUIRunInfoAndReject(t *testing.T) {
 	}
 }
 
+func TestResolveGameDir(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "Game")
+	if err := os.Mkdir(game, 0755); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := resolveGameDir(root)
+	if !ok || got != game {
+		t.Fatalf("root: %q %v", got, ok)
+	}
+	got, ok = resolveGameDir(game)
+	if ok || got != game {
+		t.Fatalf("game folder itself: %q %v", got, ok)
+	}
+	plain := t.TempDir()
+	got, ok = resolveGameDir(plain)
+	if ok || got != plain {
+		t.Fatalf("plain: %q %v", got, ok)
+	}
+}
+
 func TestUIFs(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0644); err != nil {
@@ -78,6 +99,52 @@ func TestUIFs(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("listing %#v", listing)
+	}
+	if listing.Home == "" {
+		t.Fatal("missing home")
+	}
+
+	res, err = http.Get(ts.URL + "/api/fs?path=" + url.QueryEscape(dir) + "&dirs=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	listing = fsListing{}
+	if err := json.NewDecoder(res.Body).Decode(&listing); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range listing.Entries {
+		if !e.IsDir {
+			t.Fatalf("dirs=1 included %s", e.Name)
+		}
+	}
+
+	res, err = http.Get(ts.URL + "/api/fs?path=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	listing = fsListing{}
+	if err := json.NewDecoder(res.Body).Decode(&listing); err != nil {
+		t.Fatal(err)
+	}
+	if listing.Path != listing.Home && listing.Path != listing.Desktop {
+		t.Fatalf("default browse path %q home %q desktop %q", listing.Path, listing.Home, listing.Desktop)
+	}
+}
+
+func TestUIIndexMentionsWait(t *testing.T) {
+	ts := httptest.NewServer(newUIMux())
+	defer ts.Close()
+	res, err := http.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	s := string(b)
+	if !strings.Contains(s, "several minutes") || !strings.Contains(s, "Desktop") || !strings.Contains(s, "picker-home") {
+		t.Fatalf("picker hints missing: %s", s)
 	}
 }
 

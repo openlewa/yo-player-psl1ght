@@ -170,10 +170,13 @@ type fsEntry struct {
 }
 
 type fsListing struct {
-	Path    string    `json:"path"`
-	Parent  string    `json:"parent"`
-	Entries []fsEntry `json:"entries"`
-	Error   string    `json:"error,omitempty"`
+	Path       string    `json:"path"`
+	Parent     string    `json:"parent"`
+	Home       string    `json:"home,omitempty"`
+	Desktop    string    `json:"desktop,omitempty"`
+	ShowDrives bool      `json:"showDrives,omitempty"`
+	Entries    []fsEntry `json:"entries"`
+	Error      string    `json:"error,omitempty"`
 }
 
 func uiFs(w http.ResponseWriter, r *http.Request) {
@@ -182,36 +185,37 @@ func uiFs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := r.URL.Query().Get("path")
+	dirsOnly := r.URL.Query().Get("dirs") == "1"
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(listFS(p))
+	_ = json.NewEncoder(w).Encode(listFS(p, dirsOnly))
 }
 
-func listFS(p string) fsListing {
+func listFS(p string, dirsOnly bool) fsListing {
 	p = strings.TrimSpace(p)
 	if p == "" {
-		if runtime.GOOS == "windows" {
-			return fsListing{Path: "", Parent: "", Entries: windowsDrives()}
-		}
-		p = "/"
+		p = defaultBrowsePath()
+	}
+	if p == "::drives" {
+		return withPlaces(fsListing{Entries: windowsDrives()})
 	}
 	abs, err := filepath.Abs(p)
 	if err != nil {
-		return fsListing{Path: p, Error: err.Error()}
+		return withPlaces(fsListing{Path: p, Error: err.Error()})
 	}
 	st, err := os.Stat(abs)
 	if err != nil {
-		return fsListing{Path: abs, Parent: parentPath(abs), Error: err.Error()}
+		return withPlaces(fsListing{Path: abs, Parent: parentPath(abs), Error: err.Error()})
 	}
 	if !st.IsDir() {
 		abs = filepath.Dir(abs)
 		st, err = os.Stat(abs)
 		if err != nil || !st.IsDir() {
-			return fsListing{Path: abs, Parent: parentPath(abs), Error: "not a folder"}
+			return withPlaces(fsListing{Path: abs, Parent: parentPath(abs), Error: "not a folder"})
 		}
 	}
 	ents, err := os.ReadDir(abs)
 	if err != nil {
-		return fsListing{Path: abs, Parent: parentPath(abs), Error: err.Error()}
+		return withPlaces(fsListing{Path: abs, Parent: parentPath(abs), Error: err.Error()})
 	}
 	out := fsListing{Path: abs, Parent: parentPath(abs)}
 	for _, e := range ents {
@@ -219,10 +223,14 @@ func listFS(p string) fsListing {
 		if name == "." || name == ".." {
 			continue
 		}
+		isDir := e.IsDir()
+		if dirsOnly && !isDir {
+			continue
+		}
 		out.Entries = append(out.Entries, fsEntry{
 			Name:  name,
 			Path:  filepath.Join(abs, name),
-			IsDir: e.IsDir(),
+			IsDir: isDir,
 		})
 	}
 	sort.Slice(out.Entries, func(i, j int) bool {
@@ -231,7 +239,52 @@ func listFS(p string) fsListing {
 		}
 		return strings.ToLower(out.Entries[i].Name) < strings.ToLower(out.Entries[j].Name)
 	})
-	return out
+	return withPlaces(out)
+}
+
+func withPlaces(l fsListing) fsListing {
+	l.Home = userHome()
+	l.Desktop = desktopDir()
+	l.ShowDrives = runtime.GOOS == "windows"
+	return l
+}
+
+func existingDir(p string) string {
+	if p == "" {
+		return ""
+	}
+	st, err := os.Stat(p)
+	if err != nil || !st.IsDir() {
+		return ""
+	}
+	return p
+}
+
+func userHome() string {
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return existingDir(h)
+}
+
+func desktopDir() string {
+	return existingDir(knownDesktop())
+}
+
+// defaultBrowsePath opens in the user's Desktop, then Home.
+// An empty path used to stat every drive letter, which can take minutes.
+func defaultBrowsePath() string {
+	if d := desktopDir(); d != "" {
+		return d
+	}
+	if h := userHome(); h != "" {
+		return h
+	}
+	if runtime.GOOS == "windows" {
+		return "::drives"
+	}
+	return "/"
 }
 
 func parentPath(p string) string {
@@ -243,17 +296,6 @@ func parentPath(p string) string {
 		return p
 	}
 	return parent
-}
-
-func windowsDrives() []fsEntry {
-	var out []fsEntry
-	for c := 'A'; c <= 'Z'; c++ {
-		root := string(c) + `:\`
-		if _, err := os.Stat(root); err == nil {
-			out = append(out, fsEntry{Name: root, Path: root, IsDir: true})
-		}
-	}
-	return out
 }
 
 func openBrowser(url string) {

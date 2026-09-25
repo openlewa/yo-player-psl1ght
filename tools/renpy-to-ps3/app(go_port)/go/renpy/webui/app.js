@@ -40,6 +40,9 @@
   var pickerMode = "input";
   var pickerCurrent = "";
   var pickerParent = "";
+  var pickerEntries = [];
+  var pickerHome = "";
+  var pickerDesktop = "";
 
   function currentTask() {
     return tasks[taskEl.selectedIndex] || tasks[0];
@@ -105,7 +108,9 @@
     var token = ++fsToken;
     showPickerLoading();
     var req = new XMLHttpRequest();
-    req.open("GET", "/api/fs?path=" + encodeURIComponent(path || ""), true);
+    var query = "/api/fs?path=" + encodeURIComponent(path || "");
+    if (wantsFolder()) query += "&dirs=1";
+    req.open("GET", query, true);
     req.onreadystatechange = function () {
       if (req.readyState !== 4 || token !== fsToken) return;
       hidePickerLoading();
@@ -113,6 +118,12 @@
       try { data = JSON.parse(req.responseText); } catch (e) { return; }
       pickerCurrent = data.path || "";
       pickerParent = data.parent || "";
+      pickerHome = data.home || "";
+      pickerDesktop = data.desktop || "";
+      pickerEntries = data.entries || [];
+      $("picker-home").style.display = pickerHome ? "inline" : "none";
+      $("picker-desktop").style.display = pickerDesktop ? "inline" : "none";
+      $("picker-drives").style.display = data.showDrives ? "inline" : "none";
       pickerPath.innerHTML = "";
       pickerPath.appendChild(document.createTextNode(pickerCurrent || "(drives)"));
       pickerList.innerHTML = "";
@@ -122,7 +133,7 @@
         pickerList.appendChild(err);
         return;
       }
-      var entries = data.entries || [];
+      var entries = pickerEntries;
       var i;
       for (i = 0; i < entries.length; i++) {
         (function (ent) {
@@ -151,9 +162,26 @@
   }
 
   function choosePath(path) {
+    path = folderForTask(path);
     if (pickerMode === "input") inputPath.value = path;
     else outputPath.value = path;
     closePicker();
+  }
+
+  function folderForTask(path) {
+    var task = currentTask();
+    if (pickerMode !== "input" || !path) return path;
+    if (task.verb !== "pack" && task.verb !== "info" && task.verb !== "compile") return path;
+    var trimmed = path.replace(/[\\/]+$/, "");
+    var slash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+    var base = slash >= 0 ? trimmed.substring(slash + 1) : trimmed;
+    if (base.toLowerCase() === "game") return path;
+    var i;
+    for (i = 0; i < pickerEntries.length; i++) {
+      var ent = pickerEntries[i];
+      if (ent.dir && String(ent.name).toLowerCase() === "game") return ent.path;
+    }
+    return path;
   }
 
   function run() {
@@ -230,6 +258,9 @@
   $("browse-output").onclick = function () { openPicker("output"); };
   $("picker-cancel").onclick = closePicker;
   $("picker-up").onclick = function () { loadFs(pickerParent); };
+  $("picker-home").onclick = function () { if (pickerHome) loadFs(pickerHome); };
+  $("picker-desktop").onclick = function () { if (pickerDesktop) loadFs(pickerDesktop); };
+  $("picker-drives").onclick = function () { loadFs("::drives"); };
   function withExt(name, ext) {
     if (name.length >= ext.length && name.slice(name.length - ext.length).toLowerCase() === ext) return name;
     return name + ext;

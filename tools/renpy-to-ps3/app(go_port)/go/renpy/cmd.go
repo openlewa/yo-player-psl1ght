@@ -196,11 +196,38 @@ func extractCommand(rpaPath, outputDir string) int {
 	return 0
 }
 
+// resolveGameDir uses a child folder named game when the selection is the
+// project root (the folder that contains game/) rather than game/ itself.
+func resolveGameDir(dir string) (string, bool) {
+	dir = filepath.Clean(dir)
+	st, err := os.Stat(dir)
+	if err != nil || !st.IsDir() {
+		return dir, false
+	}
+	if strings.EqualFold(filepath.Base(dir), "game") {
+		return dir, false
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return dir, false
+	}
+	for _, e := range ents {
+		if e.IsDir() && strings.EqualFold(e.Name(), "game") {
+			return filepath.Join(dir, e.Name()), true
+		}
+	}
+	return dir, false
+}
+
 func infoCommand(gameDir string) int {
 	st, err := os.Stat(gameDir)
 	if err != nil || !st.IsDir() {
 		errln("error: directory not found:", gameDir)
 		return 1
+	}
+	if next, ok := resolveGameDir(gameDir); ok {
+		logln("selected folder contains game; using", next)
+		gameDir = next
 	}
 	var files []string
 	_ = filepath.Walk(gameDir, func(p string, info os.FileInfo, err error) error {
@@ -519,6 +546,7 @@ func packCommand(args []string) int {
 		errln("error: game dir not found:", gameDir)
 		return 1
 	}
+	gameDir, switched := resolveGameDir(gameDir)
 	outRpk, err = normalizeRpkPath(gameDir, outRpk)
 	if err != nil {
 		errln("error:", err)
@@ -541,6 +569,9 @@ func packCommand(args []string) int {
 	Stderr = io.MultiWriter(origErr, logFile)
 	defer func() { Stdout, Stderr = origOut, origErr }()
 
+	if switched {
+		logln("selected folder contains game; using", gameDir)
+	}
 	logln("packing", gameDir, "->", outRpk, " (max", strconv.Itoa(maxW)+"x"+strconv.Itoa(maxH), "ascii-text="+strconv.FormatBool(asciiText)+", animated-gif="+strconv.FormatBool(animatedGif)+", ffmpeg:", ff.Path+")")
 	rc := Pack(gameDir, outRpk, ff, maxW, maxH, asciiText, useCache, clearCache, animatedGif)
 	logln("PACK_DONE rc=" + strconv.Itoa(rc))
@@ -750,6 +781,10 @@ func compileCommand(path string, full bool, outRbc string) int {
 	var units [][]any
 	st, err := os.Stat(path)
 	if err == nil && st.IsDir() {
+		if next, ok := resolveGameDir(path); ok {
+			logln("selected folder contains game; using", next)
+			path = next
+		}
 		ents, _ := os.ReadDir(path)
 		for _, e := range ents {
 			if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".rpyc") {

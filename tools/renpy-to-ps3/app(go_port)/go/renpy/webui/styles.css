@@ -175,9 +175,9 @@ button:disabled {
   left: 50%;
   top: 50%;
   width: 520px;
-  height: 360px;
+  height: 420px;
   margin-left: -260px;
-  margin-top: -180px;
+  margin-top: -210px;
   background: #2d2d2d;
   border: 1px solid #3f3f3f;
   padding: 10px;
@@ -186,6 +186,14 @@ button:disabled {
 .picker-help {
   color: #707070;
   margin-bottom: 6px;
+}
+
+.picker-places {
+  margin-bottom: 6px;
+}
+
+.picker-places button {
+  margin-right: 6px;
 }
 
 .picker-path {
@@ -200,15 +208,21 @@ button:disabled {
 }
 
 .picker-loading {
-  height: 280px;
+  height: 250px;
   border: 1px solid #3f3f3f;
   background: #1e1e1e;
 }
 
 .picker-loading-label {
-  padding-top: 110px;
+  padding-top: 90px;
   text-align: center;
   color: #cccccc;
+}
+
+.picker-loading-note {
+  margin-top: 6px;
+  text-align: center;
+  color: #707070;
 }
 
 .picker-loading-track {
@@ -232,7 +246,7 @@ button:disabled {
 }
 
 .picker-list {
-  height: 280px;
+  height: 250px;
   overflow: auto;
   border: 1px solid #3f3f3f;
   background: #1e1e1e;
