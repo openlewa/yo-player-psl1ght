@@ -82,7 +82,7 @@ void drawMainMenu(int cx, int cy, int cw, int ch)
 {
    clearGfx(0xFF000000);
    if (mmBgLoaded)
-      drawGfxTexture(cx, cy, cw, ch, mmBgTex, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
+      drawGuiBackdrop(cx, cy, cw, ch, mmBgTex);
 
    if (mmBtnN == 0) return;
 

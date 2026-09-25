@@ -23,7 +23,7 @@ var (
 	skipExt  = map[string]bool{".rpa": true, ".rpyc": true, ".rpy": true, ".rpyb": true, ".rpymc": true, ".py": true, ".pyc": true, ".txt": true, ".json": true, ".ico": true, ".md": true}
 )
 
-const cacheVersion = 1
+const cacheVersion = 2
 
 // putAsset stores data under name, matching C# OrdinalIgnoreCase: last write
 // wins, but the first-seen casing of the key is kept.
@@ -92,6 +92,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 	} else {
 		logln("scaling: per-image cap " + maxLabel + " (native resolution unknown)")
 	}
+	sceneKeys := sceneImageKeys(prog)
 
 	assets := map[string][]byte{}
 	for _, e := range ents {
@@ -152,14 +153,14 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 	}
 
 	var (
-		packed                                     []RpkEntry
-		failed                                     []string
-		images, audio, video, fonts, skipped, gifs int
-		cacheHits, encoded, passed                 int
-		srcBytes, dstBytes                         int64
-		done                                       int32
-		jobID                                      int32
-		mu                                         sync.Mutex
+		packed                                              []RpkEntry
+		failed                                              []string
+		images, audio, video, fonts, skipped, gifs, blurred int
+		cacheHits, encoded, passed                          int
+		srcBytes, dstBytes                                  int64
+		done                                                int32
+		jobID                                               int32
+		mu                                                  sync.Mutex
 	)
 	total := len(work)
 	workers := runtime.NumCPU()
@@ -179,6 +180,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 				var outBytes []byte
 				var fail string
 				kind, via := -1, -1
+				didBlur := false
 				func() {
 					defer func() {
 						if rec := recover(); rec != nil {
@@ -197,16 +199,18 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 							outExt = ".gif"
 						}
 						var errStr string
-						ok := convertAsset(ff, kv.data, ext, outExt, staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
+						blurSides := outExt != ".gif" && wantBlurSides(kv.data, ext, kv.name, sceneKeys, nativeW, nativeH, maxW, maxH)
+						ok := convertAsset(ff, kv.data, ext, outExt, staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, blurSides, ffFp, &outBytes, &errStr, &via)
 						if ok {
 							outName = kv.name
+							didBlur = blurSides
 						} else {
 							fail = kv.name + " : " + errStr
 						}
 					} else if audioExt[ext] {
 						kind = 1
 						var errStr string
-						ok := convertAsset(ff, kv.data, ext, ".ogg", staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
+						ok := convertAsset(ff, kv.data, ext, ".ogg", staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, false, ffFp, &outBytes, &errStr, &via)
 						if ok {
 							outName = changeExt(kv.name, ".ogg")
 						} else {
@@ -215,7 +219,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 					} else if videoExt[ext] {
 						kind = 2
 						var errStr string
-						ok := convertAsset(ff, kv.data, ext, ".mp4", staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, ffFp, &outBytes, &errStr, &via)
+						ok := convertAsset(ff, kv.data, ext, ".mp4", staging, int(id), uniform, factor, maxW, maxH, cacheDir, useCache, false, ffFp, &outBytes, &errStr, &via)
 						if ok {
 							outName = changeExt(kv.name, ".mp4")
 						} else {
@@ -230,6 +234,9 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 					}
 				}()
 				mu.Lock()
+				if didBlur {
+					blurred++
+				}
 				srcBytes += int64(len(kv.data))
 				if outName != "" {
 					packed = append(packed, RpkEntry{outName, outBytes})
@@ -320,6 +327,9 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 	} else if gifs > 0 {
 		logln("animated gif:", gifs, "stored as one PNG frame (the PS3 player shows a still PNG or JPEG, not a GIF or Motion JPEG)")
 	}
+	if blurred > 0 {
+		logln("4:3 scene images:", blurred, "centered on "+maxLabel+" with a blurred background on the left and right")
+	}
 	if useCache {
 		logln("asset cache:", cacheHits, "reused,", passed, "passthrough,", encoded, "encoded (dir:", cacheDir+")")
 	} else {
@@ -370,14 +380,14 @@ func printNotes(prog *IrProgram) {
 	}
 }
 
-func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int, uniform bool, factor float64, maxW, maxH int, cacheDir string, useCache bool, ffFp string, outBytes *[]byte, errStr *string, via *int) bool {
+func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int, uniform bool, factor float64, maxW, maxH int, cacheDir string, useCache, blurSides bool, ffFp string, outBytes *[]byte, errStr *string, via *int) bool {
 	*outBytes = nil
 	*errStr = ""
 	*via = 0
 
 	var cachePath string
 	if useCache {
-		key := cacheKey(src, inExt, outExt, uniform, factor, maxW, maxH, ffFp)
+		key := cacheKey(src, inExt, outExt, uniform, factor, maxW, maxH, blurSides, ffFp)
 		cachePath = filepath.Join(cacheDir, key+outExt)
 		if b, err := os.ReadFile(cachePath); err == nil {
 			*outBytes = b
@@ -385,7 +395,7 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 			return true
 		}
 	}
-	if useCache && canPassThrough(src, inExt, outExt, uniform, factor, maxW, maxH) {
+	if useCache && !blurSides && canPassThrough(src, inExt, outExt, uniform, factor, maxW, maxH) {
 		*outBytes = src
 		*via = 2
 		storeCache(cachePath, *outBytes)
@@ -414,6 +424,8 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 		} else {
 			ok, e = ff.Video(inp, outp, maxW, maxH)
 		}
+	} else if blurSides {
+		ok, e = ff.ImageBlurSides(inp, outp, maxW, maxH)
 	} else if uniform {
 		ok, e = ff.ImageScaled(inp, outp, factor)
 	} else {
@@ -441,13 +453,17 @@ func convertAsset(ff *Ffmpeg, src []byte, inExt, outExt, staging string, id int,
 	return false
 }
 
-func cacheKey(src []byte, inExt, outExt string, uniform bool, factor float64, maxW, maxH int, ffFp string) string {
+func cacheKey(src []byte, inExt, outExt string, uniform bool, factor float64, maxW, maxH int, blurSides bool, ffFp string) string {
 	u := "P"
 	if uniform {
 		u = "U"
 	}
+	blur := "0"
+	if blurSides {
+		blur = "1"
+	}
 	hdr := "v" + strconv.Itoa(cacheVersion) + "|" + ffFp + "|" + strings.ToLower(inExt) + "|" + outExt + "|" + u + "|" +
-		strconv.FormatFloat(factor, 'f', 6, 64) + "|" + strconv.Itoa(maxW) + "x" + strconv.Itoa(maxH) + "|"
+		strconv.FormatFloat(factor, 'f', 6, 64) + "|" + strconv.Itoa(maxW) + "x" + strconv.Itoa(maxH) + "|blur=" + blur + "|"
 	h := sha256.New()
 	h.Write([]byte(hdr))
 	h.Write(src)
@@ -518,6 +534,177 @@ func parseMaxSize(s string) (w, h int, ok bool) {
 		return 0, 0, false
 	}
 	return n, n, true
+}
+
+func isFourThree(w, h int) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	r := float64(w) / float64(h)
+	return r >= 1.30 && r <= 1.37
+}
+
+func isSixteenNine(w, h int) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	r := float64(w) / float64(h)
+	return r >= 1.70 && r <= 1.85
+}
+
+func quotedFile(s string) string {
+	i := strings.IndexAny(s, `"'`)
+	if i < 0 {
+		return ""
+	}
+	q := s[i]
+	rest := s[i+1:]
+	j := strings.IndexByte(rest, q)
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
+}
+
+func addSceneFile(keys map[string]bool, file string) {
+	file = strings.ReplaceAll(file, "\\", "/")
+	file = strings.TrimPrefix(file, "/")
+	low := strings.ToLower(file)
+	if low == "" {
+		return
+	}
+	keys[low] = true
+	keys[strings.ToLower(filepath.Base(low))] = true
+}
+
+// sceneImageKeys is the set of files used as `scene` backgrounds.
+func sceneImageKeys(prog *IrProgram) map[string]bool {
+	keys := map[string]bool{}
+	if prog == nil {
+		return keys
+	}
+	files := map[string]string{}
+	scan := func(code []Instr) {
+		for _, in := range code {
+			if in.Op != IrImage {
+				continue
+			}
+			body := strings.TrimSpace(prog.Str(in.B))
+			if strings.HasPrefix(strings.ToLower(body), "solid") {
+				continue
+			}
+			file := quotedFile(body)
+			if file == "" {
+				continue
+			}
+			files[prog.Str(in.A)] = file
+		}
+	}
+	scan(prog.Code)
+	scan(prog.InitCode)
+	note := func(code []Instr) {
+		for _, in := range code {
+			if in.Op != IrScene {
+				continue
+			}
+			name := prog.Str(in.A)
+			if f, ok := files[name]; ok {
+				addSceneFile(keys, f)
+				continue
+			}
+			if q := quotedFile(name); q != "" {
+				addSceneFile(keys, q)
+				continue
+			}
+			if strings.Contains(name, ".") {
+				addSceneFile(keys, name)
+			}
+		}
+	}
+	note(prog.Code)
+	note(prog.InitCode)
+	return keys
+}
+
+func assetIsScene(keys map[string]bool, assetName string) bool {
+	if len(keys) == 0 {
+		return false
+	}
+	n := strings.ToLower(strings.ReplaceAll(assetName, "\\", "/"))
+	n = strings.TrimPrefix(n, "/")
+	if keys[n] || keys[strings.ToLower(filepath.Base(n))] {
+		return true
+	}
+	for k := range keys {
+		if k != "" && strings.HasSuffix(n, "/"+k) {
+			return true
+		}
+	}
+	return false
+}
+
+func imagePixelSize(b []byte, ext string) (w, h int, ok bool) {
+	switch strings.ToLower(ext) {
+	case ".png":
+		if len(b) < 24 || string(b[1:4]) != "PNG" || string(b[12:16]) != "IHDR" {
+			return 0, 0, false
+		}
+		w = int(b[16])<<24 | int(b[17])<<16 | int(b[18])<<8 | int(b[19])
+		h = int(b[20])<<24 | int(b[21])<<16 | int(b[22])<<8 | int(b[23])
+		return w, h, w > 0 && h > 0
+	case ".jpg", ".jpeg":
+		return jpegPixelSize(b)
+	case ".gif":
+		return gifLogicalSize(b)
+	default:
+		return 0, 0, false
+	}
+}
+
+func jpegPixelSize(b []byte) (w, h int, ok bool) {
+	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
+		return 0, 0, false
+	}
+	p := 2
+	for p+4 <= len(b) {
+		if b[p] != 0xFF {
+			p++
+			continue
+		}
+		marker := b[p+1]
+		if marker == 0xD8 || marker == 0xD9 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7) {
+			p += 2
+			continue
+		}
+		length := int(b[p+2])<<8 | int(b[p+3])
+		if length < 2 || p+2+length > len(b) {
+			return 0, 0, false
+		}
+		if marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC {
+			if length < 7 {
+				return 0, 0, false
+			}
+			h = int(b[p+5])<<8 | int(b[p+6])
+			w = int(b[p+7])<<8 | int(b[p+8])
+			return w, h, w > 0 && h > 0
+		}
+		p += 2 + length
+	}
+	return 0, 0, false
+}
+
+// wantBlurSides is true for a 4:3 scene image when the pack target is 16:9
+// and the game itself is 4:3. The sharp picture stays in the center. Sprites
+// and other files are left alone.
+func wantBlurSides(src []byte, inExt, assetName string, sceneKeys map[string]bool, nativeW, nativeH, maxW, maxH int) bool {
+	if !isSixteenNine(maxW, maxH) || !isFourThree(nativeW, nativeH) {
+		return false
+	}
+	if !assetIsScene(sceneKeys, assetName) {
+		return false
+	}
+	w, h, ok := imagePixelSize(src, inExt)
+	return ok && isFourThree(w, h)
 }
 
 // fitFactor is how far a native WxH game must shrink to sit inside maxW x maxH.

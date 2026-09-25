@@ -155,6 +155,29 @@ func (ff *Ffmpeg) Image(inp, outp string, maxW, maxH int) (bool, string) {
 	return ff.Run(imageArgs(inp, outp, scaleFilter(maxW, maxH)), 10*time.Minute)
 }
 
+// blurSideFilter places a 4:3 picture in the center of a wider frame.
+// The same picture, scaled to cover and blurred, fills the left and right.
+func blurSideFilter(maxW, maxH int) string {
+	w := strconv.Itoa(maxW)
+	h := strconv.Itoa(maxH)
+	radius := maxH / 30
+	if radius < 8 {
+		radius = 8
+	}
+	if radius > 40 {
+		radius = 40
+	}
+	r := strconv.Itoa(radius)
+	return "[0:v]scale=" + w + ":" + h + ":force_original_aspect_ratio=increase,crop=" + w + ":" + h + ",boxblur=" + r + ":2[bg];" +
+		"[0:v]scale=" + w + ":" + h + ":force_original_aspect_ratio=decrease[fg];" +
+		"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=rgb24"
+}
+
+func (ff *Ffmpeg) ImageBlurSides(inp, outp string, maxW, maxH int) (bool, string) {
+	return ff.Run([]string{"-y", "-hide_banner", "-loglevel", "error", "-i", inp,
+		"-filter_complex", blurSideFilter(maxW, maxH), "-frames:v", "1", "-update", "1", outp}, 10*time.Minute)
+}
+
 func (ff *Ffmpeg) ImageScaled(inp, outp string, factor float64) (bool, string) {
 	vf := ""
 	if factor < 1.0 {

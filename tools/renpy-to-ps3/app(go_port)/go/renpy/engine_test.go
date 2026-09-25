@@ -2,6 +2,7 @@ package renpy
 
 import (
 	"fmt"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -506,6 +507,89 @@ func TestVideoOddHeight(t *testing.T) {
 	if st, err := os.Stat(out); err != nil || st.Size() == 0 {
 		t.Fatalf("mp4: %v", err)
 	}
+}
+
+func pngSizeHeader(w, h int) []byte {
+	b := make([]byte, 24)
+	copy(b, []byte{137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13})
+	copy(b[12:16], []byte("IHDR"))
+	b[16] = byte(w >> 24)
+	b[17] = byte(w >> 16)
+	b[18] = byte(w >> 8)
+	b[19] = byte(w)
+	b[20] = byte(h >> 24)
+	b[21] = byte(h >> 16)
+	b[22] = byte(h >> 8)
+	b[23] = byte(h)
+	return b
+}
+
+func TestWantBlurSides(t *testing.T) {
+	p := &IrProgram{intern: map[string]int{}}
+	p.Code = []Instr{
+		NewInstr(IrImage, p.Intern("bg room"), p.Intern(`"bg/room.png"`)),
+		NewInstr(IrScene, p.Intern("bg room")),
+		NewInstr(IrImage, p.Intern("eileen"), p.Intern(`"eileen.png"`)),
+		NewInstr(IrShow, p.Intern("eileen")),
+	}
+	keys := sceneImageKeys(p)
+	room := pngSizeHeader(1024, 768)
+	if !wantBlurSides(room, ".png", "images/bg/room.png", keys, 1024, 768, 1920, 1080) {
+		t.Fatal("4:3 scene on 16:9")
+	}
+	if wantBlurSides(room, ".png", "images/bg/room.png", keys, 1024, 768, 768, 576) {
+		t.Fatal("4:3 target should stay 4:3")
+	}
+	if wantBlurSides(room, ".png", "eileen.png", keys, 1024, 768, 1920, 1080) {
+		t.Fatal("sprite")
+	}
+	if wantBlurSides(pngSizeHeader(1920, 1080), ".png", "images/bg/room.png", keys, 1920, 1080, 1920, 1080) {
+		t.Fatal("16:9 game")
+	}
+	if !strings.Contains(blurSideFilter(1920, 1080), "boxblur") || !strings.Contains(blurSideFilter(1920, 1080), "overlay=(W-w)/2:(H-h)/2") {
+		t.Fatal(blurSideFilter(1920, 1080))
+	}
+}
+
+func TestImageBlurSides(t *testing.T) {
+	ff, err := NewFfmpeg("")
+	if err != nil {
+		t.Skip("ffmpeg:", err)
+	}
+	dir := t.TempDir()
+	in := filepath.Join(dir, "room.png")
+	out := filepath.Join(dir, "room-wide.png")
+	// 80x60, green on the left and blue on the right.
+	src := "color=c=0x00ff00:s=40x60[l];color=c=0x0000ff:s=40x60[r];[l][r]hstack"
+	if log, err := exec.Command("ffmpeg", "-y", "-filter_complex", src, "-frames:v", "1", in).CombinedOutput(); err != nil {
+		t.Fatalf("make png: %v\n%s", err, log)
+	}
+	ok, errText := ff.ImageBlurSides(in, out, 160, 90)
+	if !ok {
+		t.Fatal(errText)
+	}
+	f, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := img.Bounds()
+	if b.Dx() != 160 || b.Dy() != 90 {
+		t.Fatalf("size %dx%d", b.Dx(), b.Dy())
+	}
+	left := img.At(0, 45)
+	right := img.At(159, 45)
+	lr, lg, lb, _ := left.RGBA()
+	rr, rg, rb, _ := right.RGBA()
+	if lg <= lb || rb <= rg {
+		t.Fatalf("sides left=%v right=%v", left, right)
+	}
+	_ = lr
+	_ = rr
 }
 
 func TestGifArgsKeepFrames(t *testing.T) {
