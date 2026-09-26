@@ -806,7 +806,7 @@ void drawGameMenu(int cx, int cy, int cw, int ch)
    }
    clearGfx(0xFF000000);
    if (gmBgLoaded)
-      drawGfxTexture(cx, cy, cw, ch, gmBgTex, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
+      drawGuiBackdrop(cx, cy, cw, ch, gmBgTex);
    if (!textBuilt || textBuiltWidth != cw) buildText(cw);
    beginFocusFrame();
 

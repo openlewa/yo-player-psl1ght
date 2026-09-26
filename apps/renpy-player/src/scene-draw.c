@@ -108,7 +108,7 @@ static void drawSceneToTarget(SceneOverlay overlay)
    clearGfx(0xFF000000);   // Ren'Py's root layer clears to black (config.default_background); no tint
 
    int cx, cy, cw, ch; getSceneContentRect(&cx, &cy, &cw, &ch);
-   if (haveBg)         drawGfxTexture(cx, cy, cw, ch, bg, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
+   if (haveBg)         drawGuiBackdrop(cx, cy, cw, ch, bg);
    else if (haveSolid) fillGfxRectangle(cx, cy, cw, ch, solid);
 
    // Character sprites at their NATIVE size (scaled with the rest of the game surface; assetScale

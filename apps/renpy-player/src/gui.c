@@ -325,6 +325,21 @@ float getGuiScale(int cw) { return gui.nativeW > 0 ? (float)cw / (float)gui.nati
 
 float getGuiAssetScale(int cw) { return getGuiScale(cw) / (gui.assetScale > 0.0f ? gui.assetScale : 1.0f); }
 
+void drawGuiBackdrop(int cx, int cy, int cw, int ch, GfxTexture tex)
+{
+   int wide = 0;
+   if (tex.w > 0 && tex.h > 0 && gui.nativeW > 0 && gui.nativeH > 0)
+   {
+      float image = (float)tex.w / (float)tex.h;
+      float game = (float)gui.nativeW / (float)gui.nativeH;
+      wide = image > game + 0.25f;
+   }
+   if (wide)
+      drawGfxTexture(0, 0, getGfxScreenWidth(), getGfxScreenHeight(), tex, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
+   else
+      drawGfxTexture(cx, cy, cw, ch, tex, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
+}
+
 int getGuiDlgSize(int cw)
 {
    // Engine default dialogue size is 22 (style.default.size); used when the game sets none.
