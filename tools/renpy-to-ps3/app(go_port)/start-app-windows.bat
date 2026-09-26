@@ -19,14 +19,14 @@ certutil -urlcache -split -f "https://dl.google.com/go/go1.20.14.windows-amd64.m
 if errorlevel 1 goto :manual
 echo.
 echo Starting the installer. Approve it if Windows asks.
-echo When it finishes, close this window and run start-windows7.bat again.
+echo When it finishes, close this window and run start-app-windows.bat again.
 echo.
 start "" "%GO_MSI%"
 exit /b 1
 
 :manual
 echo Could not download the installer.
-echo Install Go yourself, then run start-windows7.bat again:
+echo Install Go yourself, then run start-app-windows.bat again:
 echo   https://go.dev/dl/go1.20.14.windows-amd64.msi
 echo Windows 7 must use 1.20.14. Windows 11 can use 1.20.14 or a newer Go.
 exit /b 1
