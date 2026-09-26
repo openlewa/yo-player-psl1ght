@@ -128,8 +128,27 @@ func TestUIFs(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&listing); err != nil {
 		t.Fatal(err)
 	}
-	if listing.Path != listing.Home && listing.Path != listing.Desktop {
-		t.Fatalf("default browse path %q home %q desktop %q", listing.Path, listing.Home, listing.Desktop)
+	if listing.Path != listing.Home {
+		t.Fatalf("linux browse starts at $HOME, got %q home %q", listing.Path, listing.Home)
+	}
+	homeParent := browseParent(listing.Home, false)
+	if homeParent == listing.Home || homeParent == "" {
+		t.Fatalf("parent of home: %q", homeParent)
+	}
+}
+
+func TestWindowsBrowseParent(t *testing.T) {
+	if normalizeHomeDrive("c:") != `C:\` || normalizeHomeDrive(`D:\`) != `D:\` {
+		t.Fatal(normalizeHomeDrive("c:"), normalizeHomeDrive(`D:\`))
+	}
+	if browseParent(`C:\`, true) != "::drives" || browseParent(`C:/`, true) != "::drives" {
+		t.Fatal("up from home drive")
+	}
+	if browseParent(`C:\Users`, true) != `C:\` {
+		t.Fatal(browseParent(`C:\Users`, true))
+	}
+	if browseParent(`C:\Users\me`, true) != `C:\Users` {
+		t.Fatal(browseParent(`C:\Users\me`, true))
 	}
 }
 

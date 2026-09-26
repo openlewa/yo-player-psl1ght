@@ -272,27 +272,81 @@ func desktopDir() string {
 	return existingDir(knownDesktop())
 }
 
-// defaultBrowsePath opens in the user's Desktop, then Home.
-// An empty path used to stat every drive letter, which can take minutes.
+// defaultBrowsePath is %HOMEDRIVE%\ on Windows (Up from there lists the other
+// drive letters) and $HOME on Linux.
 func defaultBrowsePath() string {
-	if d := desktopDir(); d != "" {
-		return d
+	if runtime.GOOS == "windows" {
+		if d := normalizeHomeDrive(os.Getenv("HOMEDRIVE")); d != "" {
+			return d
+		}
+		if h, err := os.UserHomeDir(); err == nil {
+			if d := normalizeHomeDrive(filepath.VolumeName(h)); d != "" {
+				return d
+			}
+		}
+		return "::drives"
 	}
 	if h := userHome(); h != "" {
 		return h
 	}
-	if runtime.GOOS == "windows" {
-		return "::drives"
-	}
 	return "/"
 }
 
+// normalizeHomeDrive turns "C:" or "c:\" into "C:\".
+func normalizeHomeDrive(d string) string {
+	d = strings.TrimSpace(d)
+	d = strings.TrimRight(d, `\/`)
+	if len(d) < 2 || d[1] != ':' {
+		return ""
+	}
+	letter := d[0]
+	if letter >= 'a' && letter <= 'z' {
+		letter = letter - 'a' + 'A'
+	}
+	if letter < 'A' || letter > 'Z' {
+		return ""
+	}
+	return string(letter) + `:\`
+}
+
+func isWindowsDriveRoot(p string) bool {
+	p = strings.TrimRight(strings.ReplaceAll(p, "/", `\`), `\`)
+	if len(p) != 2 || p[1] != ':' {
+		return false
+	}
+	letter := p[0]
+	if letter >= 'a' && letter <= 'z' {
+		letter = letter - 'a' + 'A'
+	}
+	return letter >= 'A' && letter <= 'Z'
+}
+
 func parentPath(p string) string {
+	return browseParent(p, runtime.GOOS == "windows")
+}
+
+func browseParent(p string, windows bool) string {
+	if windows {
+		p = strings.ReplaceAll(p, "/", `\`)
+		if isWindowsDriveRoot(p) {
+			return "::drives"
+		}
+		trimmed := strings.TrimRight(p, `\`)
+		i := strings.LastIndex(trimmed, `\`)
+		if i < 0 {
+			return "::drives"
+		}
+		parent := trimmed[:i]
+		if isWindowsDriveRoot(parent) {
+			return normalizeHomeDrive(parent)
+		}
+		if parent == "" {
+			return "::drives"
+		}
+		return parent
+	}
 	parent := filepath.Dir(p)
 	if parent == p {
-		if runtime.GOOS == "windows" {
-			return ""
-		}
 		return p
 	}
 	return parent
