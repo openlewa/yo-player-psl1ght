@@ -3,12 +3,17 @@
 package renpy
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 )
 
 func windowsDrives() []fsEntry {
 	return nil
+}
+
+func windowsHidden(fs.DirEntry) bool {
+	return false
 }
 
 func knownDesktop() string {

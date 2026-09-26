@@ -172,7 +172,6 @@ type fsEntry struct {
 type fsListing struct {
 	Path       string    `json:"path"`
 	Parent     string    `json:"parent"`
-	Home       string    `json:"home,omitempty"`
 	Desktop    string    `json:"desktop,omitempty"`
 	ShowDrives bool      `json:"showDrives,omitempty"`
 	Entries    []fsEntry `json:"entries"`
@@ -220,7 +219,7 @@ func listFS(p string, dirsOnly bool) fsListing {
 	out := fsListing{Path: abs, Parent: parentPath(abs)}
 	for _, e := range ents {
 		name := e.Name()
-		if name == "." || name == ".." {
+		if name == "." || name == ".." || hiddenName(name) || windowsHidden(e) {
 			continue
 		}
 		isDir := e.IsDir()
@@ -243,10 +242,13 @@ func listFS(p string, dirsOnly bool) fsListing {
 }
 
 func withPlaces(l fsListing) fsListing {
-	l.Home = userHome()
 	l.Desktop = desktopDir()
 	l.ShowDrives = runtime.GOOS == "windows"
 	return l
+}
+
+func hiddenName(name string) bool {
+	return name != "" && name[0] == '.'
 }
 
 func existingDir(p string) string {

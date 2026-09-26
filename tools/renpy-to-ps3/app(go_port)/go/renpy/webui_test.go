@@ -80,6 +80,12 @@ func TestUIFs(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(dir, ".secret"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "Visible"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	ts := httptest.NewServer(newUIMux())
 	defer ts.Close()
 	res, err := http.Get(ts.URL + "/api/fs?path=" + url.QueryEscape(dir))
@@ -96,12 +102,12 @@ func TestUIFs(t *testing.T) {
 		if e.Name == "a.txt" && !e.IsDir {
 			found = true
 		}
+		if e.Name == ".secret" || (len(e.Name) > 0 && e.Name[0] == '.') {
+			t.Fatalf("hidden entry listed: %s", e.Name)
+		}
 	}
 	if !found {
 		t.Fatalf("listing %#v", listing)
-	}
-	if listing.Home == "" {
-		t.Fatal("missing home")
 	}
 
 	res, err = http.Get(ts.URL + "/api/fs?path=" + url.QueryEscape(dir) + "&dirs=1")
@@ -113,10 +119,20 @@ func TestUIFs(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&listing); err != nil {
 		t.Fatal(err)
 	}
+	sawVisible := false
 	for _, e := range listing.Entries {
 		if !e.IsDir {
 			t.Fatalf("dirs=1 included %s", e.Name)
 		}
+		if e.Name == ".secret" {
+			t.Fatal("dot folder listed")
+		}
+		if e.Name == "Visible" {
+			sawVisible = true
+		}
+	}
+	if !sawVisible {
+		t.Fatalf("visible folder missing: %#v", listing.Entries)
 	}
 
 	res, err = http.Get(ts.URL + "/api/fs?path=")
@@ -128,11 +144,15 @@ func TestUIFs(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&listing); err != nil {
 		t.Fatal(err)
 	}
-	if listing.Path != listing.Home {
-		t.Fatalf("linux browse starts at $HOME, got %q home %q", listing.Path, listing.Home)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
 	}
-	homeParent := browseParent(listing.Home, false)
-	if homeParent == listing.Home || homeParent == "" {
+	if listing.Path != home {
+		t.Fatalf("linux browse starts at $HOME, got %q home %q", listing.Path, home)
+	}
+	homeParent := browseParent(home, false)
+	if homeParent == home || homeParent == "" {
 		t.Fatalf("parent of home: %q", homeParent)
 	}
 }
@@ -162,8 +182,8 @@ func TestUIIndexMentionsWait(t *testing.T) {
 	defer res.Body.Close()
 	b, _ := io.ReadAll(res.Body)
 	s := string(b)
-	if !strings.Contains(s, "several minutes") || !strings.Contains(s, "Desktop") || !strings.Contains(s, "picker-home") {
-		t.Fatalf("picker hints missing: %s", s)
+	if !strings.Contains(s, "several minutes") || !strings.Contains(s, "picker-desktop") || strings.Contains(s, "picker-home") {
+		t.Fatalf("picker hints: %s", s)
 	}
 }
 

@@ -41,7 +41,6 @@
   var pickerCurrent = "";
   var pickerParent = "";
   var pickerEntries = [];
-  var pickerHome = "";
   var pickerDesktop = "";
 
   function currentTask() {
@@ -118,10 +117,8 @@
       try { data = JSON.parse(req.responseText); } catch (e) { return; }
       pickerCurrent = data.path || "";
       pickerParent = data.parent || "";
-      pickerHome = data.home || "";
       pickerDesktop = data.desktop || "";
       pickerEntries = data.entries || [];
-      $("picker-home").style.display = pickerHome ? "inline" : "none";
       $("picker-desktop").style.display = pickerDesktop ? "inline" : "none";
       $("picker-drives").style.display = data.showDrives ? "inline" : "none";
       pickerPath.innerHTML = "";
@@ -258,7 +255,6 @@
   $("browse-output").onclick = function () { openPicker("output"); };
   $("picker-cancel").onclick = closePicker;
   $("picker-up").onclick = function () { loadFs(pickerParent); };
-  $("picker-home").onclick = function () { if (pickerHome) loadFs(pickerHome); };
   $("picker-desktop").onclick = function () { if (pickerDesktop) loadFs(pickerDesktop); };
   $("picker-drives").onclick = function () { loadFs("::drives"); };
   function withExt(name, ext) {

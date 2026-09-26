@@ -3,6 +3,7 @@
 package renpy
 
 import (
+	"io/fs"
 	"syscall"
 	"unsafe"
 )
@@ -23,6 +24,18 @@ var folderidDesktop = syscall.GUID{
 	Data2: 0xDB2C,
 	Data3: 0x424C,
 	Data4: [8]byte{0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41},
+}
+
+func windowsHidden(e fs.DirEntry) bool {
+	info, err := e.Info()
+	if err != nil {
+		return false
+	}
+	data, ok := info.Sys().(*syscall.Win32FileAttributeData)
+	if !ok || data == nil {
+		return false
+	}
+	return data.FileAttributes&syscall.FILE_ATTRIBUTE_HIDDEN != 0
 }
 
 func windowsDrives() []fsEntry {
