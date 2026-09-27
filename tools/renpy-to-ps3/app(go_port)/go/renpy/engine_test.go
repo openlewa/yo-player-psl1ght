@@ -40,6 +40,95 @@ open(%q, "wb").write(zlib.compress(raw))
 	}
 }
 
+func writeRpa(t *testing.T, rpaPath string, files map[string]string) {
+	t.Helper()
+	py := `
+import pickle, zlib, os, sys
+rpa, key = sys.argv[1], 0x12345678
+pairs = sys.argv[2:]
+blobs = []
+for i in range(0, len(pairs), 2):
+    blobs.append((pairs[i], open(pairs[i+1], "rb").read()))
+header_len = len("RPA-3.0 %016x %08x\n" % (0, key))
+index = {}
+body = b""
+for name, data in blobs:
+    off = header_len + len(body)
+    index[name] = [(off ^ key, len(data) ^ key)]
+    body += data
+index_off = header_len + len(body)
+header = ("RPA-3.0 %016x %08x\n" % (index_off, key)).encode()
+if len(header) != header_len:
+    raise SystemExit("header width changed")
+open(rpa, "wb").write(header + body + zlib.compress(pickle.dumps(index, protocol=2)))
+`
+	args := []string{"-c", py, rpaPath}
+	for name, src := range files {
+		args = append(args, name, src)
+	}
+	out, err := exec.Command("python3", args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("python rpa: %v\n%s", err, out)
+	}
+}
+
+func TestScriptsInsideRpa(t *testing.T) {
+	dir := t.TempDir()
+	game := filepath.Join(dir, "game")
+	if err := os.MkdirAll(filepath.Join(game, "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	archived := filepath.Join(dir, "archived.rpyc")
+	loose := filepath.Join(game, "script.rpyc")
+	nested := filepath.Join(game, "sub", "chapter.rpyc")
+	only := filepath.Join(dir, "only.rpyc")
+	writeRpyc(t, archived, "Eileen", "from-archive")
+	writeRpyc(t, loose, "Eileen", "from-loose")
+	writeRpyc(t, nested, "Eileen", "from-sub")
+	writeRpyc(t, only, "Eileen", "only-archive")
+	writeRpa(t, filepath.Join(game, "archive.rpa"), map[string]string{
+		"script.rpyc":      archived,
+		"only-in-rpa.rpyc": only,
+	})
+
+	units, found, fromArchive := loadScriptUnits(game)
+	if found != 3 || fromArchive != 1 {
+		t.Fatalf("found=%d fromArchive=%d", found, fromArchive)
+	}
+	prog := CompileUnits(units, false)
+	if _, ok := prog.Labels["start"]; !ok {
+		t.Fatal("missing start label")
+	}
+	var texts []string
+	for _, ins := range prog.Code {
+		if ins.Op.String() == "Say" {
+			texts = append(texts, prog.Str(ins.B))
+		}
+	}
+	joined := strings.Join(texts, ",")
+	for _, want := range []string{"from-loose", "from-sub", "only-archive"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in %q", want, joined)
+		}
+	}
+	if strings.Contains(joined, "from-archive") {
+		t.Fatal("loose script did not replace the archived copy")
+	}
+
+	os.Remove(loose)
+	os.Remove(nested)
+	units, found, fromArchive = loadScriptUnits(game)
+	if found != 2 || fromArchive != 2 || len(units) != 2 {
+		t.Fatalf("archive only: found=%d fromArchive=%d units=%d", found, fromArchive, len(units))
+	}
+	if Run([]string{"info", game}) != 0 {
+		t.Fatal("info")
+	}
+	if Run([]string{"compile", game}) != 0 {
+		t.Fatal("compile")
+	}
+}
+
 func TestPickleIntAndList(t *testing.T) {
 	// PROTO 2, BININT1 42, STOP
 	v, err := LoadPickle([]byte{0x80, 0x02, 'K', 42, '.'})

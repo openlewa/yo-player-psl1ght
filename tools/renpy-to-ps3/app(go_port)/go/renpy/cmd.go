@@ -229,24 +229,18 @@ func infoCommand(gameDir string) int {
 		logln("selected folder contains game; using", next)
 		gameDir = next
 	}
-	var files []string
-	_ = filepath.Walk(gameDir, func(p string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.EqualFold(filepath.Ext(p), ".rpyc") {
-			files = append(files, p)
-		}
-		return nil
-	})
-	if len(files) == 0 {
-		errln("error: no .rpyc files found under", gameDir)
+	scripts := collectScripts(gameDir)
+	if len(scripts) == 0 {
+		errln("error: no .rpyc files found under", gameDir, "(also checked inside .rpa)")
 		return 1
 	}
 	classes := map[string]struct{}{}
 	scanned, failed := 0, 0
-	for _, f := range files {
-		b, err := LoadRpycPickle(f)
+	for _, s := range scripts {
+		b, err := decompressRpyc(s.Data)
 		if err != nil {
 			failed++
-			errln("  (skip)", filepath.Base(f)+":", err)
+			errln("  (skip)", s.Name+":", err)
 			continue
 		}
 		for c := range ScanClasses(b) {
@@ -785,21 +779,9 @@ func compileCommand(path string, full bool, outRbc string) int {
 			logln("selected folder contains game; using", next)
 			path = next
 		}
-		ents, _ := os.ReadDir(path)
-		for _, e := range ents {
-			if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".rpyc") {
-				continue
-			}
-			list, err := LoadStatements(filepath.Join(path, e.Name()))
-			if err != nil {
-				errln("  (skip)", e.Name()+":", err)
-				continue
-			}
-			if list != nil {
-				units = append(units, []any(list))
-			}
-		}
-		logln("compiling", len(units), ".rpyc file(s) from", path)
+		var found int
+		units, found, _ = loadScriptUnits(path)
+		logln("compiling", len(units), "of", found, ".rpyc file(s) from", path)
 	} else if err == nil {
 		list, err := LoadStatements(path)
 		if err != nil {

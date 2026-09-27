@@ -25,9 +25,22 @@ func LoadAst(path string) (any, error) {
 	return LoadPickle(b)
 }
 
-// LoadStatements returns the top-level statement list of a script.
+// LoadStatements returns the top-level statement list of a script file.
 func LoadStatements(path string) (List, error) {
-	root, err := LoadAst(path)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return LoadStatementsBytes(raw)
+}
+
+// LoadStatementsBytes returns the top-level statement list of .rpyc bytes.
+func LoadStatementsBytes(raw []byte) (List, error) {
+	b, err := decompressRpyc(raw)
+	if err != nil {
+		return nil, err
+	}
+	root, err := LoadPickle(b)
 	if err != nil {
 		return nil, err
 	}

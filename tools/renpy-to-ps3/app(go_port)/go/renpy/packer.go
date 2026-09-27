@@ -57,21 +57,8 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 		}
 	}
 
-	var units [][]any
-	ents, _ := os.ReadDir(gameDir)
-	for _, e := range ents {
-		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".rpyc") {
-			continue
-		}
-		list, err := LoadStatements(filepath.Join(gameDir, e.Name()))
-		if err != nil {
-			errln("  (skip)", e.Name()+":", err)
-			continue
-		}
-		if list != nil {
-			units = append(units, []any(list))
-		}
-	}
+	units, scriptsFound, scriptsInRpa := loadScriptUnits(gameDir)
+	logln("scripts:", len(units), "compiled of", scriptsFound, ".rpyc,", scriptsInRpa, "read from .rpa")
 	prog := CompileUnits(units, asciiText)
 	gui := BuildGuiManifest(prog)
 	rbc := WriteBytecode(prog)
@@ -95,6 +82,7 @@ func Pack(gameDir, outRpk string, ff *Ffmpeg, maxW, maxH int, asciiText, useCach
 	sceneKeys := sceneImageKeys(prog)
 
 	assets := map[string][]byte{}
+	ents, _ := os.ReadDir(gameDir)
 	for _, e := range ents {
 		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".rpa") {
 			continue
