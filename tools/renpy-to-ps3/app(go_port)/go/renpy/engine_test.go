@@ -129,6 +129,31 @@ func TestScriptsInsideRpa(t *testing.T) {
 	}
 }
 
+func TestUnwrapDeepCycle(t *testing.T) {
+	d := NewDict()
+	node := &PyObject{ClassName: "renpy.ast.Say", State: d}
+	d.Set("next", node)
+	d.Set("self", Tuple{d})
+	box := &listBox{items: []any{node}}
+	d.Set("block", box)
+	out := unwrapDeep(node)
+	p, ok := out.(*PyObject)
+	if !ok || p.ClassName != "renpy.ast.Say" {
+		t.Fatalf("got %#v", out)
+	}
+	state := asDict(p.State)
+	if state == nil {
+		t.Fatal("missing state")
+	}
+	if back, _ := state.Get("next"); back != p {
+		t.Fatal("next cycle was not preserved")
+	}
+	block, _ := state.Get("block")
+	if _, ok := block.(List); !ok {
+		t.Fatalf("block type %T", block)
+	}
+}
+
 func TestPickleIntAndList(t *testing.T) {
 	// PROTO 2, BININT1 42, STOP
 	v, err := LoadPickle([]byte{0x80, 0x02, 'K', 42, '.'})

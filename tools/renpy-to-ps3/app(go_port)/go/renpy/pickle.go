@@ -432,44 +432,62 @@ func build(target, state any) {
 }
 
 func unwrapDeep(v any) any {
+	return unwrapVisit(v, map[any]any{})
+}
+
+// unwrapVisit walks a pickle graph. Ren'Py statements point at each other
+// (next, parent, block), so a visit map stops those cycles.
+func unwrapVisit(v any, seen map[any]any) any {
+	if v == nil {
+		return nil
+	}
+	switch v.(type) {
+	case *listBox, *Dict, *PyObject:
+		if prev, ok := seen[v]; ok {
+			return prev
+		}
+	}
 	switch x := v.(type) {
 	case *listBox:
 		out := make(List, len(x.items))
+		seen[x] = out
 		for i, it := range x.items {
-			out[i] = unwrapDeep(it)
+			out[i] = unwrapVisit(it, seen)
 		}
 		return out
 	case List:
 		out := make(List, len(x))
 		for i, it := range x {
-			out[i] = unwrapDeep(it)
+			out[i] = unwrapVisit(it, seen)
 		}
 		return out
 	case Tuple:
 		out := make(Tuple, len(x))
 		for i, it := range x {
-			out[i] = unwrapDeep(it)
+			out[i] = unwrapVisit(it, seen)
 		}
 		return out
 	case *Dict:
+		seen[x] = x
 		for _, e := range x.Items() {
-			x.Set(e.k, unwrapDeep(e.v))
+			x.Set(e.k, unwrapVisit(e.v, seen))
 		}
 		return x
 	case *PyObject:
+		seen[x] = x
 		if x.Args != nil {
 			for i, a := range x.Args {
-				x.Args[i] = unwrapDeep(a)
+				x.Args[i] = unwrapVisit(a, seen)
 			}
 		}
-		x.State = unwrapDeep(x.State)
+		x.State = unwrapVisit(x.State, seen)
 		if x.ListItems != nil {
 			for i, a := range x.ListItems {
-				x.ListItems[i] = unwrapDeep(a)
+				x.ListItems[i] = unwrapVisit(a, seen)
 			}
 		}
 		if x.DictItems != nil {
-			unwrapDeep(x.DictItems)
+			unwrapVisit(x.DictItems, seen)
 		}
 		return x
 	default:
