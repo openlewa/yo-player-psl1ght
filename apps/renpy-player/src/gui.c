@@ -439,6 +439,17 @@ void getGuiTextboxTextArea(int cx, int cy, int cw, int ch, int contentH, int *tx
       int padL = (int)(gui.padL * s + 0.5f);
       int padR = (int)(gui.padR * s + 0.5f);
       int padT = (int)(gui.padT * s + 0.5f);
+      // A Frame() textbox draws its 9-slice caps at frameInset (native px, same scale as the
+      // padding). When that cap is thicker than style.window's padding, the glyphs start inside
+      // the border art and read as sitting outside the box. Push the text in to the cap.
+      if (gui.frameLoaded)
+      {
+         int insetX = (int)(gui.frameInsetX * s + 0.5f);
+         int insetY = (int)(gui.frameInsetY * s + 0.5f);
+         if (insetX > padL) padL = insetX;
+         if (insetX > padR) padR = insetX;
+         if (insetY > padT) padT = insetY;
+      }
       *tx = bx + padL; *ty = by + padT; *tw = bw - padL - padR;
    }
    else

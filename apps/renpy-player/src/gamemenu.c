@@ -16,8 +16,9 @@
 #include "dbg.h"           // logWarn (thumbnail load diagnostics)
 #include "vm.h"            // getProgram -> baked imagemaps
 #include "rbc.h"           // RbcImageMap, getRbcImageMapByKind
+#include "sound.h"         // music / sfx mixer levels
 
-#define GM_ITEM_MAX 8
+#define GM_ITEM_MAX 12
 #define GM_SLOT_MAX 60
 #define GM_NUM_SLOTS   50  // config.load_save_slots
 #define GM_QUICK_SLOTS 5   // config.load_save_quick_slots (shown when config.has_quicksave)
@@ -28,6 +29,8 @@
 #define ID_SLOT(i) (1000 + (i))
 #define ID_YES     2000
 #define ID_NO      2001
+#define ID_PREF(i) (4100 + (i))
+#define PREF_ROWS  3
 
 typedef enum { GM_SCREEN_NONE, GM_SCREEN_SAVE, GM_SCREEN_LOAD, GM_SCREEN_PREFS } GmScreen;
 
@@ -75,6 +78,10 @@ static void buildSlotModel(void);
 static void lsEnter(void);     // load the imagemap load_save layout (if the game provides one)
 static void lsFree(void);      // free imagemap textures + slot text
 static void lsRefresh(void);   // re-read saves for the imagemap picker (after a save)
+static void freePrefs(void);
+static void drawPrefs(int cx, int cy, int cw, int ch, int navFrameY);
+static void adjustPref(int row, int dir);
+static int  prefsNavId(void);
 
 // Engine-constant label -> action/screen/condition map for config.game_menu (00layout.rpy). This is
 // NOT a per-game list -- it's Ren'Py's own table; the game's actual buttons + order come from the
@@ -121,6 +128,7 @@ void freeGameMenu(void)
       if (nav[i].hasInsensitive) freeGfxTexture(&nav[i].insensitive);
       freeTextTexture(&nav[i].text);
    }
+   freePrefs();
    freeTextTexture(&confirmTex); freeTextTexture(&yesTex); freeTextTexture(&noTex);
    for (int i = 0; i < slotCount; i++) freeTextTexture(&slot[i].tex);
    if (thumbLoaded) { freeGfxTexture(&thumbTex); thumbLoaded = 0; }
@@ -167,6 +175,20 @@ void enterGameMenu(void)
       loadButtonArt(button);
       navCount++;
    }
+   int haveMain = 0;
+   for (int i = 0; i < navCount; i++) if (nav[i].action == GM_MAINMENU) haveMain = 1;
+   if (!haveMain && navCount < GM_ITEM_MAX)
+   {
+      static const char *mainLabel = "Main Menu";
+      NavButton *button = &nav[navCount];
+      memset(button, 0, sizeof *button);
+      button->label = mainLabel;
+      button->action = GM_MAINMENU;
+      button->screen = GM_SCREEN_NONE;
+      button->needsInGame = 1;
+      loadButtonArt(button);
+      navCount++;
+   }
    buildSlotModel();
    lsEnter();                          // load the imagemap load_save layout if the game provides one
    clearFocus();
@@ -203,6 +225,14 @@ void enterGameMenuFromTitle(void)
    enterGameMenu();
    mainMenu      = 1;
    currentScreen = GM_SCREEN_LOAD;
+}
+
+void enterGameMenuPrefs(int fromTitle)
+{
+   enterGameMenu();
+   mainMenu = fromTitle ? 1 : 0;
+   currentScreen = GM_SCREEN_PREFS;
+   setFocus(ID_PREF(0));
 }
 
 // roundrect button/large_button xpadding is 6 when less_rounded (config.screen_width <= 640) else 12
@@ -745,7 +775,11 @@ static GmAction updateImagemapPicker(int curVisible, int curX, int curY)
    for (int m = 0; m < (int)(sizeof MENU / sizeof MENU[0]); m++)
       if (strcmp(MENU[m].label, nm) == 0) {
          if (MENU[m].needsInGame && mainMenu) return GM_NONE;
-         if (MENU[m].screen != GM_SCREEN_NONE) { currentScreen = MENU[m].screen; lsSlotsValid = 0; return GM_NONE; }
+         if (MENU[m].screen != GM_SCREEN_NONE) {
+            currentScreen = MENU[m].screen; lsSlotsValid = 0;
+            if (MENU[m].screen == GM_SCREEN_PREFS) setFocus(ID_PREF(0));
+            return GM_NONE;
+         }
          if (MENU[m].action == GM_MAINMENU) { askConfirm(GM_MAINMENU, MSG_MAIN_MENU, textBuiltWidth); return GM_NONE; }
          if (MENU[m].action == GM_QUIT)     { askConfirm(GM_QUIT, MSG_QUIT, textBuiltWidth); return GM_NONE; }
          return MENU[m].action;
@@ -792,6 +826,117 @@ static void drawConfirmPrompt(int cx, int cy, int cw, int ch)
    drawRoundRect(noX,  hboxY, ynW, ynH, scale, isFocused(ID_NO)  ? gui.gmBtnHover : gui.gmBtnIdle);
    drawBtnLabel(&yesTex, yesX, hboxY, ynW, ynH);
    drawBtnLabel(&noTex,  noX,  hboxY, ynW, ynH);
+}
+
+// Preferences page. Text speed steps the typewriter (gui.textCps). Music and sound are the
+// mixer levels. Rows sit on the left, bottom-aligned with the nav column so Left from a nav
+// button can land on them. Textures rebuild only when a value or the width changes.
+static TextTexture prefLabel[PREF_ROWS], prefValue[PREF_ROWS], prefHint;
+static int prefCw, prefCps, prefMusic, prefSfx;
+
+static const int   prefSpeeds[] = { 0, 15, 30, 60 };
+static const char *prefSpeedName[] = { "instant", "slow", "normal", "fast" };
+static const char *prefRowName[] = { "Text speed", "Music", "Sound" };
+
+static int prefSpeedIndex(void)
+{
+   if (gui.textCps <= 0) return 0;
+   if (gui.textCps <= 20) return 1;
+   if (gui.textCps <= 45) return 2;
+   return 3;
+}
+static int prefVolIndex(float v)
+{
+   int i = (int)(v * 4.0f + 0.5f);
+   if (i < 0) i = 0;
+   if (i > 4) i = 4;
+   return i;
+}
+static int prefsNavId(void)
+{
+   for (int i = 0; i < navCount; i++) if (nav[i].screen == GM_SCREEN_PREFS) return ID_NAV(i);
+   return ID_NAV(0);
+}
+static void freePrefs(void)
+{
+   for (int i = 0; i < PREF_ROWS; i++) { freeTextTexture(&prefLabel[i]); freeTextTexture(&prefValue[i]); }
+   freeTextTexture(&prefHint);
+   prefCw = 0;
+}
+static void buildPrefs(int cw)
+{
+   if (!font) return;
+   int music = prefVolIndex(getSoundMusicVolume());
+   int sfx = prefVolIndex(getSoundSfxVolume());
+   int cps = gui.textCps;
+   if (prefCw == cw && prefCps == cps && prefMusic == music && prefSfx == sfx && prefLabel[0].valid) return;
+   int size = getGuiGmTextSize(cw);
+   TextShadow sb; const TextShadow *shadow = menuShadow(cw, &sb);
+   char musicPct[16], sfxPct[16];
+   snprintf(musicPct, sizeof musicPct, "%d%%", music * 25);
+   snprintf(sfxPct, sizeof sfxPct, "%d%%", sfx * 25);
+   const char *values[PREF_ROWS] = { prefSpeedName[prefSpeedIndex()], musicPct, sfxPct };
+   for (int i = 0; i < PREF_ROWS; i++)
+   {
+      renderFontEx(&prefLabel[i], font, size, prefRowName[i], gui.gmBtnText, cw / 3, TEXT_NOWRAP, shadow, NULL);
+      char line[40];
+      snprintf(line, sizeof line, "< %s >", values[i]);
+      renderFontEx(&prefValue[i], font, size, line, gui.gmBtnText, cw / 3, TEXT_NOWRAP, shadow, NULL);
+   }
+   renderFontEx(&prefHint, font, size, "Left / Right changes the value. Circle returns to the buttons.",
+                gui.gmBtnText, (int)(cw * 0.5f), TEXT_WRAP, shadow, NULL);
+   prefCw = cw; prefCps = cps; prefMusic = music; prefSfx = sfx;
+}
+static void adjustPref(int row, int dir)
+{
+   if (row == 0)
+   {
+      int i = prefSpeedIndex() + dir;
+      if (i < 0) i = 0;
+      if (i > 3) i = 3;
+      gui.textCps = prefSpeeds[i];
+   }
+   else if (row == 1 || row == 2)
+   {
+      float cur = (row == 1) ? getSoundMusicVolume() : getSoundSfxVolume();
+      int i = prefVolIndex(cur) + dir;
+      if (i < 0) i = 0;
+      if (i > 4) i = 4;
+      float v = (float)i * 0.25f;
+      if (row == 1) setSoundMusicVolume(v);
+      else          setSoundSfxVolume(v);
+   }
+   prefCw = 0;   // rebuild the value labels on the next draw
+}
+static void drawPrefs(int cx, int cy, int cw, int ch, int navFrameY)
+{
+   if (!font) return;
+   buildPrefs(cw);
+   float scale = getGuiScale(cw);
+   int rowH = gmLineH + (int)(10 * scale + 0.5f);
+   if (rowH < 28) rowH = 28;
+   int gap = (int)(8 * scale + 0.5f);
+   int panelW = (int)(cw * 0.46f);
+   int panelH = PREF_ROWS * rowH + (PREF_ROWS - 1) * gap;
+   int panelX = cx + (int)(cw * 0.06f);
+   int panelY = navFrameY;
+   if (panelY + panelH > cy + ch) panelY = cy + ch - panelH - (int)(12 * scale);
+   if (panelY < cy) panelY = cy;
+   for (int i = 0; i < PREF_ROWS; i++)
+   {
+      int y = panelY + i * (rowH + gap);
+      addFocus(ID_PREF(i), panelX, y, panelW, rowH);
+      int focused = isFocused(ID_PREF(i));
+      drawRoundRect(panelX, y, panelW, rowH, scale, focused ? gui.gmBtnHover : gui.gmBtnIdle);
+      if (!frameLoaded) fillGfxRectangle(panelX, y, panelW, rowH, focused ? gui.gmBtnHover : gui.gmBtnIdle);
+      int tx = panelX + (int)(12 * scale + 0.5f);
+      int ty = y + (rowH - (prefLabel[i].valid ? prefLabel[i].tex.h : rowH)) / 2;
+      drawTex(&prefLabel[i], tx, ty);
+      if (prefValue[i].valid)
+         drawTex(&prefValue[i], panelX + panelW - prefValue[i].tex.w - (int)(12 * scale + 0.5f), ty);
+   }
+   if (prefHint.valid)
+      drawTex(&prefHint, panelX, panelY + panelH + gap);
 }
 
 void drawGameMenu(int cx, int cy, int cw, int ch)
@@ -861,6 +1006,7 @@ void drawGameMenu(int cx, int cy, int cw, int ch)
    if (!confirmActive)
    {
       if (currentScreen == GM_SCREEN_SAVE || currentScreen == GM_SCREEN_LOAD) drawSlots(cx, cy, cw, ch, 1);
+      else if (currentScreen == GM_SCREEN_PREFS) drawPrefs(cx, cy, cw, ch, navFrameY);
       return;
    }
    drawConfirmPrompt(cx, cy, cw, ch);
@@ -893,15 +1039,30 @@ GmAction updateGameMenu(int curVisible, int curX, int curY)
    int hoverId = curVisible ? focusAt(curX, curY) : -1;
    if (hoverId >= 0) setFocus(hoverId);
 
+   int focusId = getFocusId();
+   int onPref = (currentScreen == GM_SCREEN_PREFS && !confirmActive &&
+                 focusId >= ID_PREF(0) && focusId < ID_PREF(PREF_ROWS));
+
    // d-pad = Ren'Py's geometric focus navigation over whatever's drawn (nav column / slots / prompt).
+   // On a preferences row, Left/Right change that row instead of leaving it.
    if (isPadButtonPressed(PAD_BTN_UP))    moveFocus(0, -1);
    if (isPadButtonPressed(PAD_BTN_DOWN))  moveFocus(0,  1);
-   if (isPadButtonPressed(PAD_BTN_LEFT))  moveFocus(-1, 0);
-   if (isPadButtonPressed(PAD_BTN_RIGHT)) moveFocus(1,  0);
+   if (isPadButtonPressed(PAD_BTN_LEFT))
+   {
+      if (onPref) adjustPref(focusId - ID_PREF(0), -1);
+      else if (currentScreen == GM_SCREEN_PREFS && !confirmActive) setFocus(ID_PREF(0));
+      else moveFocus(-1, 0);
+   }
+   if (isPadButtonPressed(PAD_BTN_RIGHT))
+   {
+      if (onPref) adjustPref(focusId - ID_PREF(0), 1);
+      else moveFocus(1, 0);
+   }
 
    if (isPadButtonPressed(PAD_BTN_CIRCLE))   // dismiss
    {
       if (confirmActive) { confirmActive = 0; setFocus(confirmFromId); return GM_NONE; }
+      if (onPref) { setFocus(prefsNavId()); return GM_NONE; }   // back to the nav column, menu stays open
       return GM_RETURN;
    }
 
@@ -919,7 +1080,12 @@ GmAction updateGameMenu(int curVisible, int curX, int curY)
       {
          NavButton *button = &nav[id];
          if (!buttonEnabled(button)) return GM_NONE;                          // disabled
-         if (button->screen != GM_SCREEN_NONE) { currentScreen = button->screen; return GM_NONE; }   // show that sub-screen
+         if (button->screen != GM_SCREEN_NONE)
+         {
+            currentScreen = button->screen;
+            if (button->screen == GM_SCREEN_PREFS) setFocus(ID_PREF(0));
+            return GM_NONE;
+         }
          if (button->action == GM_MAINMENU) { askConfirm(GM_MAINMENU, MSG_MAIN_MENU, textBuiltWidth); return GM_NONE; }
          if (button->action == GM_QUIT)     { askConfirm(GM_QUIT, MSG_QUIT, textBuiltWidth); return GM_NONE; }
          return button->action;   // Return

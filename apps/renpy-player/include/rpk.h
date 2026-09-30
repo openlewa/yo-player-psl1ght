@@ -35,3 +35,6 @@ int  readRpkEntry(RpkFile *r, const char *name, unsigned char **outBuf, long *ou
 // Returns 0 on success, negative if there is no such match.
 int  readRpkEntrySuffix(RpkFile *r, const char *suffix, int index, char *outName, int outNameCap,
                         unsigned char **outBuf, long *outLen);
+
+// Walks every TOC name. cb returns non-zero to stop. Returns 0, or negative on a read error.
+int  forEachRpkName(RpkFile *r, int (*cb)(const char *name, void *ud), void *ud);
