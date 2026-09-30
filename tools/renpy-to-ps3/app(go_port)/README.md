@@ -88,4 +88,6 @@ ui [--port N]
 
 `--max` is the screen the pictures must fit inside. The page offers `1920x1080` (default, PS3/PS4 Full-HD), `1280x720` (PS3 HD-Ready), `768x576` (PS2 SD PAL) and `720x480` (PS2 SD NTSC). A single number, such as `--max 1280`, still means that many pixels on both edges.
 
+Pack, compile, and extract write the run transcript next to the output. The file uses the output's name with a `.log` extension: `MyGame.rpk` writes `MyGame.log`, and `g.rbc` writes `g.log`. The log pane prints that path as `transcript:`.
+
 Settings, on the page, remembers beta features in the browser. Animated GIF is off by default. Turn the beta on, or pass `--beta gif`, to keep every frame. The PS3 player loops those frames only when it includes the animated-GIF decoder.

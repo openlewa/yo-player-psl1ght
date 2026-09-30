@@ -358,6 +358,17 @@ func TestPackTinyGame(t *testing.T) {
 	if len(toc) < 3 {
 		t.Fatalf("toc %#v", toc)
 	}
+	if Run([]string{"pack", game, outRpk, "--max", "64x64", "--no-cache"}) != 0 {
+		t.Fatal("pack command")
+	}
+	logPath := filepath.Join(dir, "out.log")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "transcript: "+logPath) || !strings.Contains(string(body), "PACK_DONE rc=0") {
+		t.Fatalf("transcript %q", body)
+	}
 }
 
 func TestCLIInfoAndCompile(t *testing.T) {
@@ -372,6 +383,26 @@ func TestCLIInfoAndCompile(t *testing.T) {
 	}
 	if _, err := os.Stat(outRbc); err != nil {
 		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "g.log")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "transcript: "+logPath) || !strings.Contains(string(body), "IR summary") {
+		t.Fatalf("transcript %q", body)
+	}
+	if _, err := os.Stat(outRbc + ".log"); err == nil {
+		t.Fatal("log should use the output name, not the output name plus .log")
+	}
+}
+
+func TestTranscriptPath(t *testing.T) {
+	if got := transcriptPath(filepath.Join("bundles", "MyGame.rpk")); filepath.Base(got) != "MyGame.log" {
+		t.Fatal(got)
+	}
+	if got := transcriptPath(filepath.Join("bundles", "chapter.rbc")); filepath.Base(got) != "chapter.log" {
+		t.Fatal(got)
 	}
 }
 

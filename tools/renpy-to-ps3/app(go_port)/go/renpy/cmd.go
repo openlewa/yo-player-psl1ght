@@ -21,6 +21,37 @@ func logln(args ...any)               { fmt.Fprintln(Stdout, args...) }
 func errf(format string, args ...any) { fmt.Fprintf(Stderr, format, args...) }
 func errln(args ...any)               { fmt.Fprintln(Stderr, args...) }
 
+// transcriptPath names the run log after the output file.
+// "MyGame.rpk" becomes "MyGame.log" in the same folder.
+func transcriptPath(outputPath string) string {
+	dir := filepath.Dir(outputPath)
+	base := filepath.Base(outputPath)
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+	if name == "" || name == "." {
+		name = base
+	}
+	return filepath.Join(dir, name+".log")
+}
+
+// beginTranscript copies following log lines into the transcript file.
+// The returned function is safe to call when the file could not be created.
+func beginTranscript(outputPath string) func() {
+	path := transcriptPath(outputPath)
+	f, err := os.Create(path)
+	if err != nil {
+		errln("error: transcript:", err)
+		return func() {}
+	}
+	origOut, origErr := Stdout, Stderr
+	Stdout = io.MultiWriter(origOut, f)
+	Stderr = io.MultiWriter(origErr, f)
+	logln("transcript:", path)
+	return func() {
+		Stdout, Stderr = origOut, origErr
+		_ = f.Close()
+	}
+}
+
 // Run is the command-line engine the GUI calls with the same args.
 func Run(args []string) (code int) {
 	defer func() {
@@ -168,6 +199,7 @@ func listCommand(rpaPath string) int {
 }
 
 func extractCommand(rpaPath, outputDir string) int {
+	defer beginTranscript(outputDir)()
 	if _, err := os.Stat(rpaPath); err != nil {
 		errln("error: file not found:", rpaPath)
 		return 1
@@ -546,22 +578,12 @@ func packCommand(args []string) int {
 		errln("error:", err)
 		return 1
 	}
+	defer beginTranscript(outRpk)()
 	ff, err := NewFfmpeg(ffmpegPath)
 	if err != nil {
 		errln("error:", err)
 		return 1
 	}
-
-	logFile, err := os.Create(outRpk + ".log")
-	if err != nil {
-		errln("error:", err)
-		return 1
-	}
-	defer logFile.Close()
-	origOut, origErr := Stdout, Stderr
-	Stdout = io.MultiWriter(origOut, logFile)
-	Stderr = io.MultiWriter(origErr, logFile)
-	defer func() { Stdout, Stderr = origOut, origErr }()
 
 	if switched {
 		logln("selected folder contains game; using", gameDir)
@@ -772,6 +794,9 @@ func renderScript(n AstNode, indent int, sb *strings.Builder) {
 }
 
 func compileCommand(path string, full bool, outRbc string) int {
+	if outRbc != "" {
+		defer beginTranscript(outRbc)()
+	}
 	var units [][]any
 	st, err := os.Stat(path)
 	if err == nil && st.IsDir() {
