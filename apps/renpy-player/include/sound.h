@@ -14,3 +14,9 @@ void termSound(void);
 // stepping back/forward, so the track follows the scene you're on.
 const char *getSoundMusicCmd(void);
 void        restoreSoundMusic(const char *cmd);
+
+// Mixer levels, 0..1. Music applies to the track that is already playing.
+void setSoundMusicVolume(float volume);
+void setSoundSfxVolume(float volume);
+float getSoundMusicVolume(void);
+float getSoundSfxVolume(void);

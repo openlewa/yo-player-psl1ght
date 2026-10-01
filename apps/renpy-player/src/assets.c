@@ -18,9 +18,11 @@
 // (`image white = Solid("fff")`). Solids are resolved to an ARGB colour via the general colour
 // parser (parseColor handles "#rgb"/"#rrggbb"/... with or without '#'), NOT a per-name special case.
 
-#define IMG_MAX 2048
-static char     imgName[IMG_MAX][64];
-static char     imgFile[IMG_MAX][64];    // file images: the asset path (empty for solids)
+#define IMG_MAX      8192
+#define IMG_NAME_MAX 96
+#define IMG_FILE_MAX 128
+static char     imgName[IMG_MAX][IMG_NAME_MAX];
+static char     imgFile[IMG_MAX][IMG_FILE_MAX];    // file images: the asset path (empty for solids)
 static int      imgIsSolid[IMG_MAX];     // 1 = this image is a Solid colour, not a file
 static uint32_t imgSolidColor[IMG_MAX];  // ARGB for solids
 static int      imgCount;
@@ -61,12 +63,115 @@ static const char *baseName(const char *path)
    return s ? s + 1 : path;
 }
 
+static char lowerAscii(char c)
+{
+   return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+}
+
+static int eqCI(const char *a, const char *b)
+{
+   if (!a || !b) return 0;
+   while (*a && *b)
+   {
+      if (lowerAscii(*a) != lowerAscii(*b)) return 0;
+      a++; b++;
+   }
+   return *a == *b;
+}
+
+static int startsCI(const char *s, const char *pfx)
+{
+   if (!s || !pfx) return 0;
+   while (*pfx)
+   {
+      if (!*s || lowerAscii(*s) != lowerAscii(*pfx)) return 0;
+      s++; pfx++;
+   }
+   return 1;
+}
+
+static int containsCI(const char *s, const char *tok)
+{
+   if (!s || !tok || !tok[0]) return 0;
+   for (int i = 0; s[i]; i++)
+   {
+      int j = 0;
+      while (tok[j] && s[i + j] && lowerAscii(s[i + j]) == lowerAscii(tok[j])) j++;
+      if (!tok[j]) return 1;
+   }
+   return 0;
+}
+
+static int imageExt(const char *dot)
+{
+   return eqCI(dot, ".png") || eqCI(dot, ".jpg") || eqCI(dot, ".jpeg") ||
+          eqCI(dot, ".gif") || eqCI(dot, ".webp") || eqCI(dot, ".bmp");
+}
+
 // First word of an image name ("eileen happy" -> "eileen"); the sprite's identity tag.
 static void firstWord(const char *name, char *out, int cap)
 {
    int j = 0;
    while (name[j] && name[j] != ' ' && j < cap - 1) { out[j] = name[j]; j++; }
    out[j] = '\0';
+}
+
+// Adds a file image unless that name is already mapped (explicit IMAGE ops win). 1 = stored.
+static int addImageFile(const char *name, const char *file)
+{
+   if (!name || !name[0] || !file || !file[0] || imgCount >= IMG_MAX) return 0;
+   for (int i = 0; i < imgCount; i++)
+      if (!imgIsSolid[i] && eqCI(imgName[i], name)) return 0;
+   strncpy(imgName[imgCount], name, IMG_NAME_MAX - 1); imgName[imgCount][IMG_NAME_MAX - 1] = '\0';
+   strncpy(imgFile[imgCount], file, IMG_FILE_MAX - 1); imgFile[imgCount][IMG_FILE_MAX - 1] = '\0';
+   imgIsSolid[imgCount] = 0;
+   imgCount++;
+   return 1;
+}
+
+// Ren'Py auto-defines every file under images/: strip that prefix and the extension, turn
+// '/' into a space ("images/bg/room.png" -> "bg room"). An underscore alias is stored too
+// ("eileen_happy" -> "eileen happy") because some games write the spaced name in `scene`.
+static int onImageDirEntry(const char *tocName, void *ud)
+{
+   (void)ud;
+   if (imgCount >= IMG_MAX) return 1;
+   if (!startsCI(tocName, "assets/")) return 0;
+   const char *rel = tocName + 7;
+   const char *dot = strrchr(rel, '.');
+   if (!dot || !imageExt(dot)) return 0;
+   const char *body = NULL;
+   if (startsCI(rel, "images/")) body = rel + 7;
+   else
+   {
+      for (const char *p = rel; *p; p++)
+         if ((p == rel || p[-1] == '/') && startsCI(p, "images/")) { body = p + 7; break; }
+   }
+   if (!body) return 0;
+   int nlen = (int)(dot - body);
+   if (nlen <= 0 || nlen >= IMG_NAME_MAX) return 0;
+   char name[IMG_NAME_MAX];
+   for (int i = 0; i < nlen; i++) name[i] = (body[i] == '/' || body[i] == '\\') ? ' ' : body[i];
+   name[nlen] = '\0';
+   addImageFile(name, rel);
+   int underscored = 0;
+   for (int i = 0; i < nlen; i++) if (name[i] == '_') { underscored = 1; break; }
+   if (underscored)
+   {
+      char spaced[IMG_NAME_MAX];
+      for (int i = 0; i < nlen; i++) spaced[i] = (name[i] == '_') ? ' ' : name[i];
+      spaced[nlen] = '\0';
+      addImageFile(spaced, rel);
+   }
+   return 0;
+}
+
+static void registerImageDir(void)
+{
+   RpkFile r;
+   if (openRpk(&r, getGameRpkPath()) != 0) return;
+   forEachRpkName(&r, onImageDirEntry, NULL);
+   closeRpk(&r);
 }
 
 void initAssets(const RbcProgram *p)
@@ -90,7 +195,7 @@ void initAssets(const RbcProgram *p)
       int isSolid = (strncmp(c, "Solid", 5) == 0);   // `image x = Solid("fff")` -> colour, not a file
       if (!isSolid && !token[0]) continue;           // a non-Solid displayable with no file -> skip
 
-      strncpy(imgName[imgCount], name, 63); imgName[imgCount][63] = '\0';
+      strncpy(imgName[imgCount], name, IMG_NAME_MAX - 1); imgName[imgCount][IMG_NAME_MAX - 1] = '\0';
       imgIsSolid[imgCount] = isSolid;
       if (isSolid)
       {
@@ -99,34 +204,12 @@ void initAssets(const RbcProgram *p)
       }
       else
       {
-         strncpy(imgFile[imgCount], token, 63); imgFile[imgCount][63] = '\0';
+         strncpy(imgFile[imgCount], token, IMG_FILE_MAX - 1); imgFile[imgCount][IMG_FILE_MAX - 1] = '\0';
       }
       imgCount++;
    }
+   registerImageDir();
    logInfo("[rpp] image map: %d entries\n", imgCount);
-}
-
-void freeAssets(void)
-{
-   clearSprites();
-   if (bgLoaded) { freeAssetTexture(&bgTex); bgLoaded = 0; }
-   bgIsSolid = 0;
-   imgCount = 0;
-}
-
-static const char *resolveImageFile(const char *name)
-{
-   for (int i = 0; i < imgCount; i++)
-      if (!imgIsSolid[i] && strcmp(imgName[i], name) == 0) return imgFile[i];
-   return (const char *)0;
-}
-
-// If `name` is an image defined as a Solid colour, returns 1 and its ARGB.
-static int resolveImageSolid(const char *name, uint32_t *out)
-{
-   for (int i = 0; i < imgCount; i++)
-      if (imgIsSolid[i] && strcmp(imgName[i], name) == 0) { *out = imgSolidColor[i]; return 1; }
-   return 0;
 }
 
 #define GIF_CLIPS 32
@@ -205,7 +288,7 @@ GfxTexture loadBundleImage(const void *data, uint32_t size)
 {
    GfxTexture zero = { 0, 0, 0, 0 };
    const unsigned char *b = (const unsigned char *)data;
-   if (size >= 6 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F' && b[3] == '8' &&
+   if (size >= 6 && b && b[0] == 'G' && b[1] == 'I' && b[2] == 'F' && b[3] == '8' &&
        (b[4] == '7' || b[4] == '9') && b[5] == 'a')
    {
       GifAnim anim;
@@ -229,16 +312,44 @@ GfxTexture loadBundleImage(const void *data, uint32_t size)
    return loadGfxTextureMem(data, size);
 }
 
+void freeAssets(void)
+{
+   clearSprites();
+   if (bgLoaded) { freeAssetTexture(&bgTex); bgLoaded = 0; }
+   bgIsSolid = 0;
+   imgCount = 0;
+}
+
+static const char *resolveImageFile(const char *name)
+{
+   for (int i = 0; i < imgCount; i++)
+      if (!imgIsSolid[i] && eqCI(imgName[i], name)) return imgFile[i];
+   return (const char *)0;
+}
+
+// If `name` is an image defined as a Solid colour, returns 1 and its ARGB.
+static int resolveImageSolid(const char *name, uint32_t *out)
+{
+   for (int i = 0; i < imgCount; i++)
+      if (imgIsSolid[i] && eqCI(imgName[i], name)) { *out = imgSolidColor[i]; return 1; }
+   return 0;
+}
+
 int loadAssetTexture(const char *base, GfxTexture *out)
 {
    RpkFile r;
    if (openRpk(&r, getGameRpkPath()) != 0) return 0;
-   char suffix[80];
+   char suffix[256];
    snprintf(suffix, sizeof suffix, "/%s", base);
    char name[256];
    unsigned char *buf = NULL;
    long len = 0;
    int rc = readRpkEntrySuffix(&r, suffix, 0, name, sizeof name, &buf, &len);
+   if ((rc != 0 || !buf) && strchr(base, '/'))
+   {
+      snprintf(suffix, sizeof suffix, "/%s", baseName(base));
+      rc = readRpkEntrySuffix(&r, suffix, 0, name, sizeof name, &buf, &len);
+   }
    closeRpk(&r);
    if (rc != 0 || !buf) { logWarn("[rpp] img: %s not in bundle\n", base); return 0; }
 
@@ -256,7 +367,7 @@ static void loadBg(const char *file)
    if (bgLoaded && !bgIsSolid && strcmp(base, curBgFile) == 0) return;   // already showing it
 
    GfxTexture t;
-   if (!loadAssetTexture(base, &t)) return;
+   if (!loadAssetTexture(file, &t)) return;
    if (bgLoaded) freeAssetTexture(&bgTex);
    bgTex = t;
    bgLoaded = 1;
@@ -409,7 +520,7 @@ void showSprite(const RbcProgram *p, const char *name, const char *at, int atlId
    }
 
    GfxTexture t;
-   if (!loadAssetTexture(base, &t)) return;
+   if (!loadAssetTexture(file, &t)) return;
 
    int isNew = (slot < 0);
    if (isNew)
@@ -498,6 +609,37 @@ int loadNamedFont(const char *base, Font *out)
    return 1;
 }
 
+// Dialogue / text / gui faces outrank the first file that happens to open. Symbol and icon
+// fonts score below a plain face so they are only used when nothing else opens.
+static int fontScore(const char *path)
+{
+   const char *b = baseName(path);
+   int score = 1;
+   if (containsCI(b, "dialogue") || containsCI(b, "dialog")) score += 100;
+   if (containsCI(b, "say")) score += 40;
+   if (containsCI(b, "text")) score += 30;
+   if (containsCI(b, "gui")) score += 10;
+   if (containsCI(b, "symbol") || containsCI(b, "icon") || containsCI(b, "awesome") || containsCI(b, "emoji"))
+      score -= 80;
+   return score;
+}
+
+#define FONT_CAND_MAX 32
+static char fontCand[FONT_CAND_MAX][160];
+static int  fontCandN;
+
+static int collectFontCb(const char *name, void *ud)
+{
+   (void)ud;
+   const char *dot = strrchr(name, '.');
+   if (!dot || (!eqCI(dot, ".ttf") && !eqCI(dot, ".otf"))) return 0;
+   if (fontCandN >= FONT_CAND_MAX) return 1;
+   strncpy(fontCand[fontCandN], name, sizeof fontCand[0] - 1);
+   fontCand[fontCandN][sizeof fontCand[0] - 1] = '\0';
+   fontCandN++;
+   return 0;
+}
+
 int loadGameFont(const RbcProgram *p, Font *font, int *fontReady)
 {
    // Prefer the converter-resolved dialogue font (manifest text_font); fall back to scraping the
@@ -517,21 +659,45 @@ int loadGameFont(const RbcProgram *p, Font *font, int *fontReady)
    {
       const char *slash = strrchr(preferred, '/');
       const char *base = slash ? slash + 1 : preferred;
-      char suffix[160];
+      char suffix[180];
       snprintf(suffix, sizeof suffix, "/%s", base);
-      if (!tryFont(&r, suffix, &gf)) logWarn("[rpp] font: preferred %s not usable\n", preferred);
+      if (!tryFont(&r, suffix, &gf))
+      {
+         char alt[160];
+         snprintf(alt, sizeof alt, "%s", base);
+         char *dot = strrchr(alt, '.');
+         if (dot && eqCI(dot, ".ttf")) snprintf(dot, (size_t)(sizeof alt - (size_t)(dot - alt)), ".otf");
+         else if (dot && eqCI(dot, ".otf")) snprintf(dot, (size_t)(sizeof alt - (size_t)(dot - alt)), ".ttf");
+         else dot = NULL;
+         if (dot)
+         {
+            snprintf(suffix, sizeof suffix, "/%s", alt);
+            tryFont(&r, suffix, &gf);
+         }
+      }
+      if (!gf.open) logWarn("[rpp] font: preferred %s not usable\n", preferred);
    }
-   for (int idx = 0; !gf.open && idx < 16; idx++)
+   if (!gf.open)
    {
-      char name[256];
-      unsigned char *buf = NULL;
-      long len = 0;
-      int rc = readRpkEntrySuffix(&r, ".ttf", idx, name, sizeof name, &buf, &len);
-      if (rc != 0 || !buf) break;
-      logInfo("[rpp] font: fallback trying %s (%ld bytes)\n", name, len);
-      gf = openFontMemory(buf, (uint32_t)len);
-      free(buf);
-      if (gf.open) logInfo("[rpp] font: using %s\n", name);
+      fontCandN = 0;
+      forEachRpkName(&r, collectFontCb, NULL);
+      int used[FONT_CAND_MAX];
+      memset(used, 0, sizeof used);
+      for (;;)
+      {
+         int best = -1, bestScore = 0;
+         for (int i = 0; i < fontCandN; i++)
+         {
+            if (used[i]) continue;
+            int sc = fontScore(fontCand[i]);
+            if (best < 0 || sc > bestScore) { best = i; bestScore = sc; }
+         }
+         if (best < 0) break;
+         used[best] = 1;
+         char suffix[180];
+         snprintf(suffix, sizeof suffix, "/%s", baseName(fontCand[best]));
+         if (tryFont(&r, suffix, &gf)) break;
+      }
    }
 
    closeRpk(&r);

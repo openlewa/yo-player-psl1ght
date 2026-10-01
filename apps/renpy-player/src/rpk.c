@@ -207,3 +207,24 @@ int readRpkEntrySuffix(RpkFile *r, const char *suffix, int index, char *outName,
    if (outNameCap > 0) { strncpy(outName, foundName, outNameCap - 1); outName[outNameCap - 1] = '\0'; }
    return 0;
 }
+
+int forEachRpkName(RpkFile *r, int (*cb)(const char *name, void *ud), void *ud)
+{
+   if (!r->open || !cb) return -1;
+   if (seekFs(&r->file, 12, VFS_SEEK_SET) < 0) return -2;
+   for (uint32_t i = 0; i < r->count; i++)
+   {
+      unsigned char lenB[4];
+      if (readExact(&r->file, lenB, 4) != 0) return -3;
+      uint32_t nameLen = leU32(lenB);
+      if (nameLen > 255) return -4;
+      char nm[256];
+      if (readExact(&r->file, nm, nameLen) != 0) return -5;
+      nm[nameLen] = '\0';
+      unsigned char ol[16];
+      if (readExact(&r->file, ol, 16) != 0) return -6;
+      (void)ol;
+      if (cb(nm, ud)) return 0;
+   }
+   return 0;
+}

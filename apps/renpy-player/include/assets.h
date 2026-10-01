@@ -57,7 +57,7 @@ void hideSprite(const char *name);
 int           getSpriteCount(void);
 const Sprite *getSpriteAt(int i);
 
-// Loads the dialogue font: the script-named one first, else any bundled .ttf that opens.
+// Loads the dialogue font: the script-named one first, else a bundled .ttf/.otf (dialogue names first).
 // On success replaces *font (closing it if *fontReady) and sets *fontReady. Returns 1.
 int loadGameFont(const RbcProgram *p, Font *font, int *fontReady);
 

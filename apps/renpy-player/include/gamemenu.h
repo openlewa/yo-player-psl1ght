@@ -4,8 +4,8 @@
 
 // The classic-theme in-game menu (config.game_menu): the navigation column (Return, Preferences,
 // Save, Load, Main Menu, Quit) plus the engine yes/no prompt that Main Menu / Quit run before
-// acting. Opened in-game (right-click -> Triangle). The screen drives the chosen action; the file
-// picker (Save/Load) and Preferences land as later steps.
+// acting. Opened in-game (right-click -> Triangle). The screen drives the chosen action. Save/Load
+// is the file picker; Preferences edits text speed and the music/sound levels.
 
 typedef enum {
    GM_NONE = 0,    // nothing chosen yet (still navigating)
@@ -23,6 +23,7 @@ void        initGameMenu(Font *font);               // inject the shared font (o
 void        enterGameMenu(void);                    // open the menu in-game (lands on Save; main_menu = False)
 void        enterGameMenuOn(const char *engineScreen);  // open in-game on a specific sub-screen by its engine label (save_screen/load_screen/preferences_screen)
 void        enterGameMenuFromTitle(void);           // open from the title for "Load Game" (Load screen; main_menu = True)
+void        enterGameMenuPrefs(int fromTitle);      // open on Preferences (fromTitle greys Save / Main Menu)
 void        drawGameMenu(int cx, int cy, int cw, int ch);
 GmAction    updateGameMenu(int curVisible, int curX, int curY);   // poll pad + virtual cursor -> action (GM_NONE while navigating)
 const char *getGameMenuSelectedSlot(void);             // the slot picked for GM_DO_SAVE / GM_DO_LOAD ("1".."a5")

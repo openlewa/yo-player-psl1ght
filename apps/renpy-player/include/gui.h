@@ -154,6 +154,11 @@ float getGuiScale(int cw);
 // the converter pre-scaled the assets).
 float getGuiAssetScale(int cw);
 
+// Draw a background. A 4:3 picture packed onto a 16:9 canvas (sharp center,
+// blurred sides) covers the whole 1920x1080 frame. Other images stay in the
+// letterboxed content rect.
+void drawGuiBackdrop(int cx, int cy, int cw, int ch, GfxTexture tex);
+
 // Scaled dialogue / speaker-name text size (screen px).
 int getGuiDlgSize(int cw);
 int getGuiGmTextSize(int cw);

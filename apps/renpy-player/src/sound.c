@@ -14,8 +14,8 @@
 
 // Ren'Py's default mixer volume is 1.0 for every channel (engine audio.py), and this game
 // overrides none -- so 1.0 matches the PC build's level.
-#define MUSIC_VOLUME 1.0f
-#define SFX_VOLUME   1.0f
+static float musicVolume = 1.0f;
+static float sfxVolume   = 1.0f;
 
 static int         ready;
 static Audio       music;
@@ -23,6 +23,22 @@ static int         musicOn;
 static const char *curMusicCmd;     // stable token of the current `play music` command (NULL = none)
 static Audio       sfx[SFX_POOL];
 static int         sfxCursor;
+
+void setSoundMusicVolume(float volume)
+{
+   if (volume < 0.0f) volume = 0.0f;
+   if (volume > 1.0f) volume = 1.0f;
+   musicVolume = volume;
+   if (musicOn) setAudioVolume(&music, volume);
+}
+void setSoundSfxVolume(float volume)
+{
+   if (volume < 0.0f) volume = 0.0f;
+   if (volume > 1.0f) volume = 1.0f;
+   sfxVolume = volume;
+}
+float getSoundMusicVolume(void) { return musicVolume; }
+float getSoundSfxVolume(void)   { return sfxVolume; }
 
 void initSound(void)
 {
@@ -97,8 +113,8 @@ static void playMusic(const char *file, float fadeIn)
    music = loadAudioMem(buf, (uint32_t)len, AUDIO_STREAM);
    free(buf);
    if (music.vorbis || music.pcmData) {
-      if (fadeIn > 0.0f) { playAudio(&music, 0.0f, 1.0f, 1 /*loop*/); fadeAudio(&music, MUSIC_VOLUME, fadeIn); }
-      else                 playAudio(&music, MUSIC_VOLUME, 1.0f, 1 /*loop*/);
+      if (fadeIn > 0.0f) { playAudio(&music, 0.0f, 1.0f, 1 /*loop*/); fadeAudio(&music, musicVolume, fadeIn); }
+      else                 playAudio(&music, musicVolume, 1.0f, 1 /*loop*/);
       musicOn = 1;
    }
    else logWarn("[rpp] music '%s' decode failed\n", file);
@@ -122,7 +138,7 @@ static void playSound(const char *file)
    if (slot->pcmData || slot->vorbis) { stopAudio(slot); freeAudio(slot); }
    *slot = loadAudioMem(buf, (uint32_t)len, AUDIO_MEMORY);
    free(buf);
-   if (slot->pcmData) playAudio(slot, SFX_VOLUME, 1.0f, 0 /*no loop*/);
+   if (slot->pcmData) playAudio(slot, sfxVolume, 1.0f, 0 /*no loop*/);
 }
 
 // Reads the float after a keyword (e.g. "fadein 1.0" -> 1.0); 0 if the keyword is absent.
