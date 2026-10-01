@@ -238,9 +238,7 @@ void showSayMenu(int cw, const char *const *captions, int count, int selected)
    {
       interpolate(captions[i], interp, sizeof interp);
       stripTags(interp, caption, sizeof caption);
-      uint32_t color = gui.choiceColor;
-      if (i == selected && gui.choiceHoverColor != gui.choiceColor) color = gui.choiceHoverColor;
-      else if (i == selected) color = 0xFFFFE14Au;   // hover == idle: gold so the row still reads as chosen
+      uint32_t color = (i == selected) ? gui.choiceHoverColor : gui.choiceColor;
       renderFontEx(&menuItemTex[i], font, size, caption, color, maxW, TEXT_WRAP, shadow, NULL);
    }
 }
@@ -404,17 +402,6 @@ void drawSayMenu(int cx, int cy, int cw, int ch, int selected, int count)
          fillGfxRectangle(bx, y, btnW, btnH, gui.textboxColor);   // no image -> selection shows via the text colour
       if (menuItemTex[i].valid)
          drawTex(&menuItemTex[i], bx + (btnW - menuItemTex[i].tex.w) / 2, y + (btnH - menuItemTex[i].tex.h) / 2);
-      if (i == selected)
-      {
-         // Idle and hover art are often the same image, and the two text colours match, so the
-         // focused row was invisible. A bar on the left edge marks it on any background.
-         int barW = (int)(8 * scale + 0.5f); if (barW < 6) barW = 6;
-         int inset = (int)(6 * scale + 0.5f); if (inset < 4) inset = 4;
-         int barH = btnH - 2 * inset;
-         if (barH < 4) { inset = 0; barH = btnH; }
-         fillGfxRectangle(bx + inset, y + inset, barW, barH, 0xFF000000u);
-         fillGfxRectangle(bx + inset + 2, y + inset + 2, barW - 4 > 2 ? barW - 4 : 2, barH - 4 > 2 ? barH - 4 : 2, 0xFFFFE14Au);
-      }
       y += btnH + gap;
    }
 }

@@ -325,21 +325,6 @@ float getGuiScale(int cw) { return gui.nativeW > 0 ? (float)cw / (float)gui.nati
 
 float getGuiAssetScale(int cw) { return getGuiScale(cw) / (gui.assetScale > 0.0f ? gui.assetScale : 1.0f); }
 
-void drawGuiBackdrop(int cx, int cy, int cw, int ch, GfxTexture tex)
-{
-   int wide = 0;
-   if (tex.w > 0 && tex.h > 0 && gui.nativeW > 0 && gui.nativeH > 0)
-   {
-      float image = (float)tex.w / (float)tex.h;
-      float game = (float)gui.nativeW / (float)gui.nativeH;
-      wide = image > game + 0.25f;
-   }
-   if (wide)
-      drawGfxTexture(0, 0, getGfxScreenWidth(), getGfxScreenHeight(), tex, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
-   else
-      drawGfxTexture(cx, cy, cw, ch, tex, 0.0f, 0.0f, 1.0f, 1.0f, COLOR_WHITE, GFX_FILTER_LINEAR);
-}
-
 int getGuiDlgSize(int cw)
 {
    // Engine default dialogue size is 22 (style.default.size); used when the game sets none.
@@ -439,17 +424,6 @@ void getGuiTextboxTextArea(int cx, int cy, int cw, int ch, int contentH, int *tx
       int padL = (int)(gui.padL * s + 0.5f);
       int padR = (int)(gui.padR * s + 0.5f);
       int padT = (int)(gui.padT * s + 0.5f);
-      // A Frame() textbox draws its 9-slice caps at frameInset (native px, same scale as the
-      // padding). When that cap is thicker than style.window's padding, the glyphs start inside
-      // the border art and read as sitting outside the box. Push the text in to the cap.
-      if (gui.frameLoaded)
-      {
-         int insetX = (int)(gui.frameInsetX * s + 0.5f);
-         int insetY = (int)(gui.frameInsetY * s + 0.5f);
-         if (insetX > padL) padL = insetX;
-         if (insetX > padR) padR = insetX;
-         if (insetY > padT) padT = insetY;
-      }
       *tx = bx + padL; *ty = by + padT; *tw = bw - padL - padR;
    }
    else

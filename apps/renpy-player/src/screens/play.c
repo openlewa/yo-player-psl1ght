@@ -30,13 +30,12 @@
 #include "vm.h"                   // bytecode interpreter; play.c implements its host hooks
 #include "gamepath.h"             // getGameRpkPath() (game + saves location)
 #include "savestate.h"            // generic VM-state save/load (game-menu Save/Load)
-#include "osk-input.h"            // system keyboard for renpy.input (CharName and the like)
 
 #define HINT_GRAY 0xFFA0A0A0   // engine UI only (navigation hints), not a game/Ren'Py value
 
 // Screen mode. M_RUN is the initial/executing sentinel (the VM runs synchronously, then a host
 // hook sets one of the interactive modes before runVm returns).
-typedef enum { M_RUN, M_SAY, M_MENU, M_DONE, M_ERROR, M_TRANS, M_PAUSE, M_MAINMENU, M_GAMEMENU, M_IMAGEMAP, M_INPUT } Mode;
+typedef enum { M_RUN, M_SAY, M_MENU, M_DONE, M_ERROR, M_TRANS, M_PAUSE, M_MAINMENU, M_GAMEMENU, M_IMAGEMAP } Mode;
 
 static RbcProgram prog;
 static int        loaded;
@@ -44,13 +43,12 @@ static Mode       mode;
 
 // Boot phases for classic-theme games: run the game's `splashscreen` label, show its main
 // menu, then `start`. Games with no menu in the manifest skip straight to `start` (as before).
-typedef enum { BOOT_GAME, BOOT_SPLASH, BOOT_MENU, BOOT_TRY_LABEL } BootPhase;
+typedef enum { BOOT_GAME, BOOT_SPLASH, BOOT_MENU } BootPhase;
 static BootPhase bootPhase;
 
 // The main menu itself lives in mainmenu.c (M_MAINMENU just drives it). enterMainMenu builds it
 // and enters the mode; it's defined lower down but the endProgram hook above it needs it.
 static void enterMainMenu(void);
-static void enterMainMenuBuiltin(void);
 
 // 1 while the in-game menu was opened FROM THE TITLE (main-menu "Load Game"): GM_RETURN / Circle
 // then goes back to the main menu rather than resuming a (non-existent) in-game line.
@@ -164,14 +162,7 @@ int jumpToEngineScreen(const char *name)
       mode = M_GAMEMENU;
       return 1;
    }
-   if (strstr(name, "preferences"))
-   {
-      gmFromTitle = 1;
-      enterGameMenuPrefs(1);
-      mode = M_GAMEMENU;
-      return 1;
-   }
-   return 0;   // unknown engine screen -> inert
+   return 0;   // unknown engine screen -> inert (preferences/extra: follow-up)
 }
 
 // Show a dialogue / NVL line: update the current speaker, record a history frame for rollback,
@@ -609,108 +600,18 @@ static void drawActiveOverlays(int cx, int cy, int cw, int ch)
    }
 }
 
-// renpy.input(...) — the OSK result is applied on the next update, then the VM resumes.
-static int  inputDone;
-static char inputVar[64];
-static char inputText[128];
-static char inputPrompt[160];
-
-static int identChar(char c)
-{
-   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
-}
-
-static void copyQuoted(const char *p, char *out, int cap)
-{
-   out[0] = '\0';
-   if (!p || (*p != '"' && *p != '\'')) return;
-   char q = *p++;
-   int j = 0;
-   while (*p && *p != q && j < cap - 1)
-   {
-      if (*p == '\\' && p[1]) p++;
-      out[j++] = *p++;
-   }
-   out[j] = '\0';
-}
-
-// Pulls `name = renpy.input("prompt", default="...")` out of a python block. 1 = found.
-static int parseRenpyInput(const char *code, char *var, int varCap, char *prompt, int promptCap, char *dflt, int dfltCap)
-{
-   const char *call = strstr(code, "renpy.input");
-   if (!call) return 0;
-   var[0] = prompt[0] = dflt[0] = '\0';
-   const char *eq = NULL;
-   for (const char *p = call; p > code; p--)
-   {
-      if (*p == '\n' || *p == ';') break;
-      if (*p == '=' && p[-1] != '=' && p[-1] != '!' && p[-1] != '<' && p[-1] != '>' && p[1] != '=') { eq = p; break; }
-   }
-   if (eq)
-   {
-      const char *e = eq;
-      while (e > code && (e[-1] == ' ' || e[-1] == '\t')) e--;
-      const char *s = e;
-      while (s > code && identChar(s[-1])) s--;
-      int n = (int)(e - s);
-      if (n > 0 && n < varCap) { memcpy(var, s, (size_t)n); var[n] = '\0'; }
-   }
-   const char *paren = strchr(call, '(');
-   if (paren)
-   {
-      const char *q = paren;
-      while (*q && *q != '"' && *q != '\'') q++;
-      if (*q) copyQuoted(q, prompt, promptCap);
-      const char *d = strstr(paren, "default");
-      if (d)
-      {
-         const char *v = d + 7;
-         while (*v == ' ' || *v == '\t' || *v == '=') v++;
-         if (*v == '"' || *v == '\'') copyQuoted(v, dflt, dfltCap);
-      }
-   }
-   return 1;
-}
-
-static void onInputDone(const char *text)
-{
-   if (text && text[0]) snprintf(inputText, sizeof inputText, "%s", text);
-   inputDone = 1;   // cancel or an empty field keeps the default already stored in inputText
-}
-
 // Raw python is a no-op (assignments are lowered to ASSIGN) except `renpy.pause(N)` -- a timed
-// hold of the current scene, common in intros -- and `renpy.input`, which opens the system
-// keyboard. 1 = the VM should yield.
+// hold of the current scene, common in intros. 1 = a pause started (the VM yields).
 int runPyExec(const char *code)
 {
    const char *pauseCall = code ? strstr(code, "renpy.pause") : NULL;
-   if (pauseCall && (!code || !strstr(code, "renpy.input") || pauseCall < strstr(code, "renpy.input")))
-   {
-      const char *paren = strchr(pauseCall, '(');
-      double seconds = 0.0;   // 0 = wait for input only
-      if (paren) { const char *arg = paren + 1; while (*arg == ' ') arg++; if (*arg && *arg != ')') seconds = atof(arg); }
-      recordPauseFrame();   // checkpoint so rollback can land on the paused scene (e.g. the "Disconnected" message)
-      beginScenePause(seconds);
-      mode = M_PAUSE;
-      return 1;
-   }
-   char var[64], prompt[160], dflt[128];
-   if (!code || !parseRenpyInput(code, var, sizeof var, prompt, sizeof prompt, dflt, sizeof dflt)) return 0;
-   snprintf(inputVar, sizeof inputVar, "%s", var);
-   if (!prompt[0]) snprintf(inputPrompt, sizeof inputPrompt, "%s", var[0] ? var : "Input");
-   else            snprintf(inputPrompt, sizeof inputPrompt, "%s", prompt);
-   snprintf(inputText, sizeof inputText, "%s", dflt);
-   inputDone = 0;
-   logInfo("[rpp] input: %s\n", inputVar[0] ? inputVar : "(discard)");
-   int cx, cy, cw, ch; getSceneContentRect(&cx, &cy, &cw, &ch);
-   showSayLine(cx, cy, cw, ch, NULL, inputPrompt, 0, 0, 0, 0);
-   if (!oskInputBegin(inputPrompt, dflt[0] ? dflt : NULL, onInputDone))
-   {
-      if (inputVar[0]) { Value v; memset(&v, 0, sizeof v); v.t = VT_STR; v.s = inputText; setVar(inputVar, &v, 0); }
-      logWarn("[rpp] input: keyboard did not open\n");
-      return 0;
-   }
-   mode = M_INPUT;
+   if (!pauseCall) return 0;
+   const char *paren = strchr(pauseCall, '(');
+   double seconds = 0.0;   // 0 = wait for input only
+   if (paren) { const char *arg = paren + 1; while (*arg == ' ') arg++; if (*arg && *arg != ')') seconds = atof(arg); }
+   recordPauseFrame();   // checkpoint so rollback can land on the paused scene (e.g. the "Disconnected" message)
+   beginScenePause(seconds);
+   mode = M_PAUSE;
    return 1;
 }
 
@@ -725,7 +626,6 @@ void runUserLine(const char *line)
 void endProgram(void)
 {
    if (bootPhase == BOOT_SPLASH) { enterMainMenu(); return; }
-   if (bootPhase == BOOT_TRY_LABEL) { enterMainMenuBuiltin(); return; }
    mode = M_DONE;
    int cx, cy, cw, ch; getSceneContentRect(&cx, &cy, &cw, &ch);
    showSayEnd(cw, "The End.");
@@ -742,19 +642,6 @@ void failVm(const char *message)
 
 // ---- main menu (M_MAINMENU drives mainmenu.c) ----
 
-static void enterMainMenuBuiltin(void)
-{
-   buildMainMenu();
-   bootPhase = BOOT_MENU;
-   mode = M_MAINMENU;
-}
-
-static int menuLabelVisible(void)
-{
-   return mode == M_IMAGEMAP || mode == M_MENU || mode == M_GAMEMENU ||
-          mode == M_SAY || mode == M_PAUSE || mode == M_TRANS || mode == M_MAINMENU || mode == M_INPUT;
-}
-
 static void enterMainMenu(void)
 {
    // config.main_menu_music: play it while the menu is up (the game's own `play music` on start
@@ -766,19 +653,20 @@ static void enterMainMenu(void)
       execSound(cmd);
    }
 
-   // A game main_menu label that actually shows something (imagemap, choices, a line) wins.
-   // Screen-language menus often compile to a label that returns without drawing; that falls
-   // through to the built-in Start / Load / Preferences / Quit list.
+   // If the game defines its OWN main_menu label (e.g. an imagemap menu, as RE:Alistair does), run
+   // that in the VM rather than our built-in manifest menu -- the label drives the menu and jumps to
+   // start / load / etc. itself. Otherwise show the built-in classic menu (mainmenu.c).
    int mmAddr = getRbcLabelAddr(&prog, "main_menu");
    if (mmAddr >= 0)
    {
-      bootPhase = BOOT_TRY_LABEL;
+      bootPhase = BOOT_GAME;   // the game's label owns the flow from here
       startVm(mmAddr);
       runVm();
-      if (bootPhase != BOOT_TRY_LABEL) return;   // the label ended and the built-in menu is up
-      if (menuLabelVisible()) { bootPhase = BOOT_GAME; return; }
+      return;
    }
-   enterMainMenuBuiltin();
+   buildMainMenu();   // build the menu + load its art (mainmenu.c)
+   bootPhase = BOOT_MENU;
+   mode = M_MAINMENU;
 }
 
 // Acts on the menu's chosen action: Start runs the `start` label; Quit leaves to the selector.
@@ -798,13 +686,6 @@ static void applyMainMenuAction(MmAction action)
       freeMainMenu();
       gmFromTitle = 1;
       enterGameMenuFromTitle();
-      mode = M_GAMEMENU;
-   }
-   else if (action == MM_ACTION_PREFS)
-   {
-      freeMainMenu();
-      gmFromTitle = 1;
-      enterGameMenuPrefs(1);
       mode = M_GAMEMENU;
    }
    else if (action == MM_ACTION_QUIT) popScreen();
@@ -924,7 +805,6 @@ static void initPlay(void)
    fontReady = 1;
    initSay(&font);
    initGameMenu(&font);
-   initMainMenu(&font);
 
    // 1) Load bytecode.
    RpkFile r;
@@ -973,13 +853,22 @@ static void initPlay(void)
    int initAddr = getRbcLabelAddr(&prog, "__init__");
    if (initAddr >= 0) { startVm(initAddr); runVmInit(); }
 
-   // 4) Boot. Splash (if the game has one), then the main menu, then Start. Games whose
-   //    main_menu label draws nothing still get the built-in menu — a gui theme with no
-   //    classic button art used to skip the menu and jump straight into the script.
-   bootPhase = BOOT_SPLASH;
-   int splash = getRbcLabelAddr(&prog, "splashscreen");
-   if (splash >= 0) { startVm(splash); runVm(); }   // endProgram() -> enterMainMenu
-   else enterMainMenu();
+   // 4) Boot. Classic-theme games (the manifest defines a main menu) run the splashscreen
+   //    label, then show the main menu, then start; games with no menu run from `start`
+   //    directly, exactly as before.
+   bootPhase = BOOT_GAME;
+   if (gui.mmBg[0] || gui.mmBtnCount > 0)
+   {
+      bootPhase = BOOT_SPLASH;
+      int splash = getRbcLabelAddr(&prog, "splashscreen");
+      if (splash >= 0) { startVm(splash); runVm(); }   // endProgram() -> enterMainMenu
+      else enterMainMenu();
+   }
+   else
+   {
+      startVm((int)prog.entryAddr);
+      runVm();   // run until first Say / Menu / End
+   }
 }
 
 static void resumePlay(void) {}
@@ -1045,20 +934,6 @@ static void updatePlay(void)
          // Hold the current scene (drawn normally) for the pause's duration; X/-> skips.
          if (hasScenePauseElapsed() || isPadButtonPressed(PAD_BTN_CROSS) || isPadButtonPressed(PAD_BTN_RIGHT))
             runVm();   // resume past the pause
-         break;
-      case M_INPUT:
-         // The keyboard reports through appPoll. If it closed without a result, keep the default.
-         if (!inputDone && !oskInputActive()) inputDone = 1;
-         if (inputDone)
-         {
-            inputDone = 0;
-            if (inputVar[0])
-            {
-               Value v; memset(&v, 0, sizeof v); v.t = VT_STR; v.s = inputText[0] ? inputText : "";
-               setVar(inputVar, &v, 0);
-            }
-            runVm();
-         }
          break;
       case M_IMAGEMAP:
       {
@@ -1128,7 +1003,7 @@ static void drawSideImage(int cx, int cy, int cw, int ch)
 static void drawOverlay(int cx, int cy, int cw, int ch)
 {
    // (No dev scene/show HUD -- not a Ren'Py concept.)
-   if      (mode == M_SAY || mode == M_INPUT)    drawSayLine(cx, cy, cw, ch);
+   if      (mode == M_SAY)                       drawSayLine(cx, cy, cw, ch);
    else if (mode == M_MENU)
    {
       if (menuHasCaption) drawSayLine(cx, cy, cw, ch);   // the narrator caption in the dialogue box...
@@ -1137,7 +1012,7 @@ static void drawOverlay(int cx, int cy, int cw, int ch)
    else if (mode == M_DONE || mode == M_ERROR)   drawSayEnd(cx, cy, cw, ch);
    // The side image is stacked AFTER the say window in the engine (ui.image(side_image) follows the
    // window in show_display_say), so it draws IN FRONT of the textbox, not behind it.
-   if (mode == M_SAY || mode == M_INPUT) drawSideImage(cx, cy, cw, ch);
+   if (mode == M_SAY) drawSideImage(cx, cy, cw, ch);
 }
 
 static void drawPlay(void)
